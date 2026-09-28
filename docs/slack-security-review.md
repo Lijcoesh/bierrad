@@ -14,7 +14,7 @@ SLACK_BOT_TOKEN is server-only. The optional secret type is isolated under worke
 
 Public DTOs explicitly contain opaque session IDs and display names. Only hosts get allowlisted enabled/source/count/sync-time/result-status fields. No browser gets a Slack channel/user/message identifier, permalink from server, credential or mapping. The host's pasted link exists briefly in their input and HTTPS request body; it is cleared on successful import. Spectators get no Slack metadata or controls. Live rosters/capabilities are not persisted in browser storage. Expiry deletes the session including source, mapping and outbox. Provider backups and already delivered Slack replies follow their own retention policies; ending a session does not delete Slack messages.
 
-External names are normalized/bounded and rendered as React text; Slack output uses plain_text blocks and an escaped non-parsed fallback, no broadcast/mentions/unfurls. Synthetic fixtures only. Maximum 100 participants and one current posting record; no historical directory/results database.
+External names are normalized/bounded and rendered as React text; Slack output uses structured rich_text blocks and an escaped non-parsed fallback. Only server-resolved winner identities become explicit user mention elements; manual names remain literal text nodes. No broadcast/group mentions/links/unfurls. Synthetic fixtures only. Maximum 100 participants and one current posting record; no historical directory/results database.
 
 ## Durable posting and failure semantics
 
@@ -26,7 +26,7 @@ Slack does not give this implementation a documented transactional exactly-once 
 
 Automated tests cover strict URL parsing/SSRF cases, complete reactions, deduplication, names/filtering, refresh and opaque identity, safe DTOs, grant expiry/rotation, source rights, deterministic result text, failure/retry, disconnected alarm completion, reentrant completion and crash recovery. Existing local/remote/capability tests remain. Frontend/backend typechecks, frontend build and Worker dry-run must pass before publication. No configured lint task. Review source/diff/build for secrets, unsafe VITE variables, private data and dependencies.
 
-Production activation requires an installed app with reactions:read/users:read/chat:write, bot conversation membership, SLACK_BOT_TOKEN and a privately provisioned SLACK_START_GRANT. No bot token was configured during implementation; real Slack acceptance remains pending. The feature fails closed without both secrets; manual use remains available.
+Production activation requires an installed app with reactions:read/users:read/chat:write, bot conversation membership, SLACK_BOT_TOKEN and a privately provisioned SLACK_START_GRANT. The initial implementation had no bot token configured. On 2026-09-28 the user configured it and demonstrated a successful real thread reply. The new mention rendering still requires a real draw acceptance check. The feature fails closed without both secrets; manual use remains available.
 
 ## Required answers
 
@@ -41,4 +41,13 @@ Production activation requires an installed app with reactions:read/users:read/c
 9. Draw remains valid after post failure? **Yes.**
 10. Permanent employee directory or identifiable result history? **No:** session TTL; delivered replies follow Slack retention.
 
-Validation completed: 34 tests pass (23 frontend/domain/controller and 11 Worker/Slack tests), including viewer WebSocket privacy and disconnected automatic posting. Desktop synthetic Slack-host review and a 390px mobile iframe confirmed the controls, unique final winners and no live browser storage. A rotated-SVG horizontal overflow found in mobile review was fixed with bounded clipping around the wheel, preserving its pointer/shadow. Production build and both typechecks passed; runtime dependency audit found zero known vulnerabilities. Real Slack workspace testing remains pending configuration.
+Validation completed: 34 tests pass (23 frontend/domain/controller and 11 Worker/Slack tests), including viewer WebSocket privacy and disconnected automatic posting. Desktop synthetic Slack-host review and a 390px mobile iframe confirmed the controls, unique final winners and no live browser storage. A rotated-SVG horizontal overflow found in mobile review was fixed with bounded clipping around the wheel, preserving its pointer/shadow. Production build and both typechecks passed; runtime dependency audit found zero known vulnerabilities. The user subsequently confirmed the first real thread reply on 2026-09-28.
+
+
+## Winner mentions and icon review — 2026-09-28
+
+The user explicitly requested tagging winners, superseding the initial no-mentions requirement for official Slack winners only. SECURITY.md remains unchanged. At draw creation, reverse-map opaque winner IDs to validated private Slack identities and freeze them in the temporary job. Retry recipients cannot drift after later mapping changes. No lookup by name, no new API method/scope, no user IDs in HTTP/WebSocket DTOs. The posting request sends these identities back only to the same Slack integration for intended mentions. Plain text elements carry manual names, including hostile-looking markup, without interpreting it. The fallback escapes special characters and disables automatic parsing. Broadcast mentions cannot be generated by participant text. Legacy jobs without the optional identity array remain supported during their existing TTL.
+
+Tests cover equal display names, mixed manual/Slack winners, exact official identity mapping, invalid identity fallback, frozen retry identity, legacy jobs, HTTP/WS privacy and actual Worker outbound mention payloads. Icon SVG/PNG contains only the existing generic vector brand, no profile photos or employee data. No runtime or development dependency was added; PNG was exported with a temporary CLI. The app icon is uploaded in Slack settings, without chat:write.customize or request-level icon overrides.
+
+Mention release validation after integrating the current main: 39 tests pass (27 frontend and 12 Worker/Slack), both typechecks and both production builds pass. Diff/dependency/secret checks passed; no dependency changes, no private fields in frontend artifacts. The 1024px icon was visually reviewed. Slack mention rendering is verified against the documented payload and the mocked Worker integration; a real new draw is the remaining visual acceptance check.

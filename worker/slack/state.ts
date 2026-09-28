@@ -7,6 +7,8 @@ export interface SlackJob {
   drawId: string;
   source: SlackSource;
   names: string[];
+  /** Private, frozen in winner order; absent on jobs created before mentions shipped. */
+  mentionIds?: (string | null)[];
   status: "pending" | "posting" | "posted" | "failed" | "uncertain";
   readyAt: number;
   attemptedAt?: number;
@@ -63,6 +65,12 @@ export function queueResult(record: StoredSession) {
   const draw = record.session.activeDraw,
     slack = record.slack;
   if (!draw || !slack?.source) return;
+  const identities = new Map(
+    Object.entries(slack.mapping).map(([slackId, participantId]) => [
+      participantId,
+      slackId,
+    ]),
+  );
   slack.job = {
     drawId: draw.id,
     source: { ...slack.source },
@@ -70,6 +78,7 @@ export function queueResult(record: StoredSession) {
       (spin) =>
         record.session.participants.find((p) => p.id === spin.winnerId)!.name,
     ),
+    mentionIds: draw.spins.map((spin) => identities.get(spin.winnerId) ?? null),
     status: "pending",
     readyAt: Math.max(
       ...draw.spins.map((s) => Date.parse(s.startAt) + s.durationMs),
@@ -82,17 +91,34 @@ export function resultBody(job: SlackJob) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-  // Plain-text blocks plus an escaped, non-parsed accessible fallback: no mentions/links.
+  // Only server-resolved identities become mention elements. Names remain literal text.
+  const elements: (
+    | { type: "text"; text: string }
+    | { type: "user"; user_id: string }
+  )[] = [{ type: "text", text: "🍻 Het rad heeft gesproken!\n" }];
+  job.names.forEach((name, index) => {
+    if (index) elements.push({ type: "text", text: " · " });
+    const id = job.mentionIds?.[index];
+    elements.push(
+      id && /^[UW][A-Z0-9]{8,20}$/.test(id) && id !== "USLACKBOT"
+        ? { type: "user", user_id: id }
+        : { type: "text", text: name },
+    );
+  });
+  elements.push({
+    type: "text",
+    text: `\n${job.names.length === 1 ? "Jij mag bier halen!" : "Jullie mogen bier halen!"}`,
+  });
   return {
     channel: job.source.channelId,
     thread_ts: job.source.parentMessageTs,
     text: escaped,
-    blocks: text
-      .match(/[\s\S]{1,2800}/g)!
-      .map((part) => ({
-        type: "section",
-        text: { type: "plain_text", text: part, emoji: false },
-      })),
+    blocks: [
+      {
+        type: "rich_text",
+        elements: [{ type: "rich_text_section", elements }],
+      },
+    ],
     mrkdwn: false,
     parse: "none",
     link_names: false,

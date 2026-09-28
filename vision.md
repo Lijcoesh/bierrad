@@ -292,7 +292,7 @@ Bijvoorbeeld:
 >
 > Succes heren/dames. Het volk heeft dorst.
 
-Het bericht bevat alle geselecteerde bierhalers, ongeacht het aantal. De toon mag speels zijn en kan later eventueel variëren.
+Het bericht bevat alle geselecteerde bierhalers, ongeacht het aantal. Via Slack geïmporteerde winnaars worden met hun echte Slack-identiteit vermeld; handmatig toegevoegde namen blijven gewone tekst. De toon mag speels zijn en kan later eventueel variëren.
 
 ---
 

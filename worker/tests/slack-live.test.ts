@@ -279,6 +279,20 @@ test(
       assert.equal(sent[0].thread_ts, "1234567890.123456");
       assert.equal(sent[0].reply_broadcast, false);
       assert.ok(String(sent[0].text).includes(official.join(" · ")));
+      const resultBlocks = sent[0].blocks as {
+        elements: {
+          elements: { type: string; user_id?: string; text?: string }[];
+        }[];
+      }[];
+      const mentionElements = resultBlocks[0].elements[0].elements;
+      assert.deepEqual(
+        mentionElements.filter((e) => e.type === "user").map((e) => e.user_id),
+        ["U00000001"],
+      );
+      assert.ok(
+        mentionElements.some((e) => e.type === "text" && e.text === "Bob"),
+      );
+      assert.ok(!JSON.stringify(state).includes("U00000001"));
       await Promise.all([
         stub.runCompletion(),
         stub.runCompletion(),

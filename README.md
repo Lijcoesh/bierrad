@@ -155,7 +155,7 @@ Automatische geplande trekkingen zijn niet geïmplementeerd. Een toekomstige sch
 
 ## Slack-deelnemers en threaduitslag
 
-Een bevoegde organisator kan via een **privé-startlink** een Slack-sessie openen. Een gewone publieke host heeft geen Slack-toegang. Kies Slack, plak een berichtlink en haal de `:beers:`-reactors op. Refresh volgt de reacties en behoudt handmatige toevoegingen; gelijke namen krijgen onderscheidende labels met stabiele tijdelijke IDs. Na de trekking post de server de officiële winnaars automatisch in de oorspronkelijke thread, ook als de host gesloten is. Fouten veranderen de uitslag niet; alleen zeker afgewezen posts kunnen gecontroleerd opnieuw worden aangeboden. Bij onzekere aflevering voorkomt Bierrad herverzending.
+Een bevoegde organisator kan via een **privé-startlink** een Slack-sessie openen. Een gewone publieke host heeft geen Slack-toegang. Kies Slack, plak een berichtlink en haal de `:beers:`-reactors op. Refresh volgt de reacties en behoudt handmatige toevoegingen; gelijke namen krijgen onderscheidende labels met stabiele tijdelijke IDs. Na de trekking post de server de officiële winnaars automatisch in de oorspronkelijke thread, ook als de host gesloten is. Geïmporteerde Slack-winnaars krijgen een echte @vermelding; handmatige deelnemers blijven gewone tekst. Fouten veranderen de uitslag niet; alleen zeker afgewezen posts kunnen gecontroleerd opnieuw worden aangeboden. Bij onzekere aflevering voorkomt Bierrad herverzending.
 
 [Appmanifest en veilige instelling](docs/slack-setup.md) · [Security review en tien antwoorden](docs/slack-security-review.md)
 

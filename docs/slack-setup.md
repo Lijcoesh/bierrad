@@ -38,7 +38,7 @@ Een import is atomair: bij errors/onvolledige gebruikerslijsten blijft de vorige
 
 **Opnieuw ophalen** volgt de huidige reacties: verdwenen reactors verdwijnen, nieuwe worden toegevoegd. Expliciet handmatig toegevoegde deelnemers blijven. Handmatig verwijderen van een Slack-deelnemer is tijdelijk: refresh brengt hen terug als hun reactie nog staat. Overschakelen naar Handmatig houdt de huidige lijst maar ontkoppelt Slack; volgende trekkingen posten niet meer. Geen writes naar reacties of originele berichten. Maximaal 100 deelnemers, import maximaal eens per minuut per sessie en langer bij Slack Retry-After. Geen automatische read-retries.
 
-Na de laatste wheel-stop post de server de officiële namen automatisch als één korte reactie in dezelfde thread, ook zonder verbonden host. Geen broadcast naar het kanaal, mentions, links, niet-winnaars of technische identifiers. Pending/posting blokkeert kort een nieuwe trekking/reset zodat de vorige verzending niet verloren gaat. Na een mislukte verzending blijven de winnaars geldig.
+Na de laatste wheel-stop post de server de officiële namen automatisch als één korte reactie in dezelfde thread, ook zonder verbonden host. Alleen geïmporteerde Slack-winnaars krijgen een echte @vermelding. De server bevriest hun Slack-identiteit bij de trekking; handmatige namen blijven letterlijke tekst. Geen broadcast naar het kanaal, links of niet-winnaars. Slack-ID’s gaan alleen terug naar Slack voor deze vermelding, nooit naar Bierrad-browsers. Pending/posting blokkeert kort een nieuwe trekking/reset zodat de vorige verzending niet verloren gaat. Na een mislukte verzending blijven de winnaars geldig.
 
 Bij een aantoonbare afwijzing mag de host na de wachttijd **Opnieuw plaatsen** gebruiken. Bij een netwerkfout/ongeldig succesantwoord of crash na het vastleggen van de verzendpoging is aflevering **onzeker**: controleer de thread. Bierrad probeert dan niet opnieuw, om dubbele berichten te voorkomen. Een nieuwe trekking vervangt de tijdelijke status van de vorige trekking. Er is geen permanente historie.
 
@@ -53,3 +53,12 @@ Zonder Slack-account/token test `npm test` de echte Worker/SQLite/alarms met een
 - [reactions.get](https://docs.slack.dev/reference/methods/reactions.get/): `full=true`; het aantal moet overeenkomen met de unieke ontvangen gebruikers, anders geen import.
 - [users.info](https://docs.slack.dev/reference/methods/users.info/): beperkte naamselectie; geen email scope.
 - [chat.postMessage](https://docs.slack.dev/reference/methods/chat.postMessage/): parent `thread_ts`, geen reply_broadcast, plain_text blocks en niet-geparste fallback.
+
+
+## Appicoon en @vermeldingen
+
+Upload `public/slack-icon.png` (1024 × 1024) in de Slack-appinstellingen onder **Basic Information → Display Information → App icon** en sla op. De PNG is een export van `public/slack-icon.svg`, gebaseerd op het bestaande favicon. Dit wijzigt het app/bot-icoon; er is geen extra scope of afzender-override nodig.
+
+Nieuwe trekkingen vermelden Slack-winnaars met het officiële [rich-text user-element](https://docs.slack.dev/reference/block-kit/block-elements/user-element/). Slack toont hun actuele weergavenaam. Alleen door de server uit de importmapping verkregen identiteiten worden vermeld; ingevoerde namen kunnen geen @here/@channel of andere mentions injecteren. Bestaande pending jobs zonder mentionmapping blijven als tekst werken. Bestaande Slack-berichten worden niet gewijzigd. De tekstfallback voor meldingen/screenreaders bevat leesbare namen.
+
+PNG opnieuw exporteren zonder projectdependency: `npx --yes --registry=https://registry.npmjs.org @resvg/resvg-js-cli@2.6.2-beta.1 --no-system-font public/slack-icon.svg public/slack-icon.png`.

@@ -196,9 +196,14 @@ test("refresh retains opaque IDs and manual additions, distinguishes equal names
   assert.equal(record.session.winnerCount, 2);
   assert.ok(!JSON.stringify(publicSession(record)).includes("U00000001"));
   assert.ok(!JSON.stringify(publicSession(record)).includes("C00000001"));
-  reconcile(record, source, [people[0], { slackId: "U00000003", name: "Charlie" }], now);
+  reconcile(
+    record,
+    source,
+    [people[0], { slackId: "U00000003", name: "Charlie" }],
+    now,
+  );
   assert.equal(record.slack.mapping[people[0].slackId], ids[people[0].slackId]);
-  assert.ok(record.session.participants.some(p => p.name === "Charlie"));
+  assert.ok(record.session.participants.some((p) => p.name === "Charlie"));
   assert.equal(record.session.participants.length, 3);
   reconcile(record, source, [], now);
   assert.deepEqual(
@@ -271,7 +276,10 @@ test("posting freezes official winners/target; thread-only safe singular/plural;
   assert.equal(body.reply_broadcast, false);
   assert.ok(body.text.includes("Jullie"));
   assert.ok(!body.text.includes("<@"));
-  assert.equal(body.blocks[0].text.type, "plain_text");
+  assert.equal(body.blocks[0].type, "rich_text");
+  assert.ok(
+    body.blocks[0].elements[0].elements.every((e) => e.type === "text"),
+  );
   assert.ok(resultBody({ ...job, names: ["Alice"] }).text.includes("Jij mag"));
   const posted = await postResult(
     client((url, init) => {
@@ -331,4 +339,75 @@ test("posting freezes official winners/target; thread-only safe singular/plural;
   );
   queueResult(r);
   assert.equal(r.slack.job!.names.length, 2);
+});
+
+test("mentions use frozen server identity, never a display name or browser-supplied markup", () => {
+  const now = Date.now(),
+    record = newSession("host", "spectator", now);
+  record.slack = { grantHash: "hash", mapping: {} };
+  reconcile(
+    record,
+    source,
+    [
+      { slackId: "U00000001", name: "Alice" },
+      { slackId: "U00000002", name: "Alice" },
+    ],
+    now,
+  );
+  mutate(
+    record,
+    "host",
+    {
+      type: "setParticipants",
+      revision: record.revision,
+      names: ["Alice", "Alice (2)", "<@U00000003> & <!channel>"],
+    },
+    now,
+  );
+  mutate(
+    record,
+    "host",
+    { type: "setWinnerCount", count: 3, revision: record.revision },
+    now,
+  );
+  mutate(record, "host", { type: "startDraw", revision: record.revision }, now);
+  const job = record.slack.job!;
+  const expected = record.session.activeDraw!.spins.map(
+    (s) =>
+      Object.entries(record.slack!.mapping).find(
+        ([, id]) => id === s.winnerId,
+      )?.[0] ?? null,
+  );
+  assert.deepEqual(job.mentionIds, expected);
+  record.slack.mapping = {}; // Later state must not change recipients of this exact draw/retry.
+  const body = resultBody(job),
+    elements = body.blocks[0].elements[0].elements;
+  assert.deepEqual(
+    elements
+      .filter((e) => e.type === "user")
+      .map((e) => e.user_id)
+      .sort(),
+    ["U00000001", "U00000002"],
+  );
+  assert.ok(
+    elements.some(
+      (e) => e.type === "text" && e.text === "<@U00000003> & <!channel>",
+    ),
+  );
+  assert.ok(!body.text.includes("<@"));
+  assert.ok(!body.text.includes("<!channel>"));
+  assert.ok(!JSON.stringify(publicSession(record)).includes("mentionIds"));
+  assert.ok(!JSON.stringify(publicSession(record)).includes("U00000001"));
+  const oldJob = { ...job, mentionIds: undefined };
+  assert.ok(
+    resultBody(oldJob).blocks[0].elements[0].elements.every(
+      (e) => e.type === "text",
+    ),
+  );
+  const invalid = { ...job, mentionIds: job.names.map(() => "!channel") };
+  assert.ok(
+    resultBody(invalid).blocks[0].elements[0].elements.every(
+      (e) => e.type === "text",
+    ),
+  );
 });
