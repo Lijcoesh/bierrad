@@ -1,7 +1,9 @@
+import { useTheme } from "../Theme";
 import type { BeerWheelSession } from "../domain/models";
 import { wheelParticipants } from "../domain/drawEngine";
 import { BeerWheel } from "./BeerWheel";
 export function WheelGrid({ session }: { session: BeerWheelSession }) {
+  const theme = useTheme();
   const people = wheelParticipants(session);
   // Empty setup shows a placeholder instead of an unbounded saved preference.
   const count =
@@ -19,10 +21,10 @@ export function WheelGrid({ session }: { session: BeerWheelSession }) {
           <section
             className="wheel-tile"
             key={i}
-            aria-label={`Bierhaler ${i + 1}`}
+            aria-label={`${theme.haler} ${i + 1}`}
           >
             <h2 className="wheel-label">
-              BIERHALER {String(i + 1).padStart(2, "0")}
+              {theme.haler.toUpperCase()} {String(i + 1).padStart(2, "0")}
             </h2>
             <BeerWheel
               people={people}
@@ -35,7 +37,7 @@ export function WheelGrid({ session }: { session: BeerWheelSession }) {
             >
               {winner ? (
                 <>
-                  <span>🍺</span> <strong>{winner.name}</strong>
+                  <span>{theme.winnerIcon}</span> <strong>{winner.name}</strong>
                 </>
               ) : (
                 <span>

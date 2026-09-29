@@ -504,3 +504,9 @@ Slack blijft de ingang voor deelname via `:beers:` en voor de uitslag. Slack-cre
 Een toeschouwer die tijdens het draaien opent, ontvangt de actuele sessie met de oorspronkelijke starttijd en volledige `DrawInstruction` met alle spins. Het scherm moet op het juiste punt instappen of een al voltooide uitslag tonen, zonder zelf opnieuw te loten. De remote controller schat het klokverschil, verbindt opnieuw met oplopende wachttijd en haalt de actuele serverstand op.
 
 LocalSessionController en RemoteSessionController gebruiken dezelfde radcomponenten. Meerdere kijkers, tijdelijke host-/kijkrechten, WebSockets en herstel na verbindingsverlies zijn geïmplementeerd. Gebruikersaccounts en automatische planning blijven toekomstwerk. Slack-import en automatische threadresultaten zijn optioneel beschikbaar na serverconfiguratie. Een deelbare link verleent tijdelijke toegang en is geen volledige gebruikersauthenticatie.
+
+# Koffierad — uitbreiding 2026-09-28
+
+Koffierad bepaalt uitsluitend **wie koffie haalt**, niet wie koffie zet of welke koffiesoort iemand drinkt. Dezelfde spanning, deterministische raderen en standalone bruikbaarheid gelden voor beide varianten. De website biedt een wissel en directe koffielink. Lokale deelnemers en voorkeuren blijven gescheiden; live-sessies hebben één onveranderlijke variant.
+
+Slack blijft de ingang: een aparte Koffierad-app importeert uitsluitend `:coffee:` op het gekozen hoofdbericht en publiceert de serveruitslag in dezelfde thread, met ☕ en officiële winnaarvermeldingen. Bier behoudt `:beers:`. Elke app heeft eigen servercredentials en organisator-starttoegang. Slashcommando's en automatische planning zijn niet geïmplementeerd.

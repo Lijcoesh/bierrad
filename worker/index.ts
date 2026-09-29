@@ -1,4 +1,9 @@
-import { authorizeStart, type SlackSecrets } from "./slack/access";
+import { isWheelVariant } from "../shared/variant";
+import {
+  authorizeStart,
+  slackEnvironment,
+  type SlackSecrets,
+} from "./slack/access";
 import { randomHex, parseCapability, hashSecret } from "./auth";
 import { json, readBody } from "./http";
 import { RequestError } from "./session";
@@ -42,12 +47,20 @@ export default {
             !body ||
             typeof body !== "object" ||
             Array.isArray(body) ||
-            Object.keys(body).length
+            Object.keys(body).some((key) => key !== "variant") ||
+            ("variant" in body && !isWheelVariant(body.variant))
           )
             throw new RequestError(400, "invalid");
+          const variant =
+            "variant" in body && isWheelVariant(body.variant)
+              ? body.variant
+              : "beer";
           const grant =
             url.pathname === "/api/slack-sessions"
-              ? await authorizeStart(request.headers.get("Authorization"), env)
+              ? await authorizeStart(
+                  request.headers.get("Authorization"),
+                  slackEnvironment(env, variant),
+                )
               : undefined;
           if (url.pathname === "/api/slack-sessions" && !grant)
             throw new RequestError(404, "unavailable");
@@ -62,6 +75,7 @@ export default {
             hostHash,
             spectatorHash,
             grant,
+            variant,
           );
           response = json(
             {

@@ -1,3 +1,4 @@
+import type { WheelVariant } from "./variant";
 import type {
   DrawInstruction,
   DrawState,
@@ -18,6 +19,7 @@ export interface SlackHostStatus {
 }
 /** Explicit DTO; never serialize backend storage directly. */
 export interface PublicBeerWheelSession {
+  variant?: WheelVariant;
   participants: readonly Participant[];
   winnerCount: number;
   state: DrawState;

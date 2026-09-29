@@ -2,11 +2,14 @@ import { object, SlackApiClient, SlackError } from "./api";
 export interface SlackSource {
   channelId: string;
   parentMessageTs: string;
-  reactionName: "beers";
+  reactionName: "beers" | "coffee";
 }
 const timestamp = /^\d{10}\.\d{6}$/;
 const channel = /^[CG][A-Z0-9]{8,20}$/;
-export function parseSlackPermalink(raw: unknown): SlackSource {
+export function parseSlackPermalink(
+  raw: unknown,
+  reactionName: SlackSource["reactionName"] = "beers",
+): SlackSource {
   if (
     typeof raw !== "string" ||
     raw.length > 1024 ||
@@ -51,7 +54,7 @@ export function parseSlackPermalink(raw: unknown): SlackSource {
   return {
     channelId: match[1],
     parentMessageTs: parent ?? `${match[2]}.${match[3]}`,
-    reactionName: "beers",
+    reactionName,
   };
 }
 export interface SlackPerson {
@@ -79,7 +82,7 @@ export class SlackReactionParticipantSource {
     if (
       !channel.test(source.channelId) ||
       !timestamp.test(source.parentMessageTs) ||
-      source.reactionName !== "beers"
+      !["beers", "coffee"].includes(source.reactionName)
     )
       throw new SlackError("slack_link");
     const controller = new AbortController();
@@ -104,7 +107,9 @@ export class SlackReactionParticipantSource {
         throw new SlackError("slack_response");
       const reactions = message.reactions ?? [];
       if (!Array.isArray(reactions)) throw new SlackError("slack_response");
-      const matches = reactions.map(object).filter((r) => r.name === "beers");
+      const matches = reactions
+        .map(object)
+        .filter((r) => r.name === source.reactionName);
       if (matches.length > 1) throw new SlackError("slack_response");
       if (!matches.length) return [];
       const r = matches[0];

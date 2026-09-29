@@ -1,8 +1,13 @@
-const KEY = "bierrad.weights.v1";
+import { themes, type WheelVariant } from "../../shared/variant";
+const key = (variant: WheelVariant) => `${themes[variant].storage}.weights.v1`;
 /** Weights stay on this device until reset; forced wins are never stored. */
-export function loadWeights(): Record<string, number> {
+export function loadWeights(
+  variant: WheelVariant = "beer",
+): Record<string, number> {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? "{}");
+    const parsed: unknown = JSON.parse(
+      localStorage.getItem(key(variant)) ?? "{}",
+    );
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
       return {};
     return Object.fromEntries(
@@ -15,9 +20,12 @@ export function loadWeights(): Record<string, number> {
     return {};
   }
 }
-export function saveWeights(weights: Record<string, number>): void {
+export function saveWeights(
+  weights: Record<string, number>,
+  variant: WheelVariant = "beer",
+): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(weights));
+    localStorage.setItem(key(variant), JSON.stringify(weights));
   } catch {
     /* Storage is optional; weights then last for this window only. */
   }

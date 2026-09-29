@@ -1,3 +1,4 @@
+import { useTheme } from "../Theme";
 import type { Participant } from "../domain/models";
 export function FinalResult({
   winners,
@@ -12,25 +13,32 @@ export function FinalResult({
   canControl: boolean;
   disabled: boolean;
 }) {
+  const theme = useTheme();
   return (
     <section className="final-result" aria-live="polite">
-      <span className="eyebrow">DE BIERBRIGADE VAN DEZE WEEK</span>
-      <h2>🍻 Het rad heeft gesproken! 🍻</h2>
-      <ul className="winner-names" aria-label="De bierhalers">
+      <span className="eyebrow">{theme.finale}</span>
+      <h2>
+        {theme.icon} Het rad heeft gesproken! {theme.icon}
+      </h2>
+      <ul className="winner-names" aria-label={`De ${theme.haler}s`}>
         {winners.map((winner) => (
           <li key={winner.id}>{winner.name}</li>
         ))}
       </ul>
       <h3>
         {winners.length === 1
-          ? "Jij mag bier halen!"
-          : "Jullie mogen bier halen!"}
+          ? `Jij mag ${theme.drink} halen!`
+          : `Jullie mogen ${theme.drink} halen!`}
       </h3>
-      <p>Het volk heeft dorst. Maak ons trots.</p>
+      <p>
+        {theme.variant === "coffee"
+          ? "De koffiepauze kan beginnen. Maak ons trots."
+          : "Het volk heeft dorst. Maak ons trots."}
+      </p>
       {canControl && (
         <>
           <button className="primary" disabled={disabled} onClick={onAgain}>
-            🍻 Opnieuw draaien
+            {theme.icon} Opnieuw draaien
           </button>
           <button className="text-button" disabled={disabled} onClick={onSetup}>
             Deelnemers aanpassen

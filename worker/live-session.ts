@@ -1,10 +1,15 @@
+import { themes, type WheelVariant } from "../shared/variant";
 import { SlackApiClient, SlackError } from "./slack/api";
 import {
   SlackReactionParticipantSource,
   parseSlackPermalink,
 } from "./slack/source";
 import { reconcile, postResult } from "./slack/state";
-import { slackAllowed, type SlackSecrets } from "./slack/access";
+import {
+  slackAllowed,
+  slackEnvironment,
+  type SlackSecrets,
+} from "./slack/access";
 import { getCapabilities } from "../src/domain/capabilities";
 import { DurableObject } from "cloudflare:workers";
 import { equalHash, hashSecret, parseCapability } from "./auth";
@@ -49,12 +54,13 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
     hostHash: string,
     spectatorHash: string,
     grant?: { hash: string; expiresAt: number },
+    variant: WheelVariant = "beer",
   ): Promise<string> {
     if (this.read()) throw new Error("unavailable");
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS session (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), value TEXT NOT NULL)",
     );
-    const record = newSession(hostHash, spectatorHash, Date.now());
+    const record = newSession(hostHash, spectatorHash, Date.now(), variant);
     if (grant) {
       record.slack = { grantHash: grant.hash, mapping: {} };
       record.expiresAt = Math.min(record.expiresAt, grant.expiresAt);
@@ -86,7 +92,10 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
         ...(role === "host" && record.slack
           ? {
               slack: {
-                enabled: slackAllowed(record.slack.grantHash, this.env),
+                enabled: slackAllowed(
+                  record.slack.grantHash,
+                  slackEnvironment(this.env, record.variant),
+                ),
                 source: record.slack.source
                   ? ("slack" as const)
                   : ("manual" as const),
@@ -171,7 +180,10 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
         typeof command === "object" &&
         "type" in command &&
         command.type === "slackRetry" &&
-        !slackAllowed(record.slack?.grantHash, this.env)
+        !slackAllowed(
+          record.slack?.grantHash,
+          slackEnvironment(this.env, record.variant),
+        )
       )
         throw new RequestError(403, "forbidden");
       if (command !== null) {
@@ -337,7 +349,13 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
     raw: object,
   ): Promise<Response> {
     const command = raw as Record<string, unknown>;
-    if (role !== "host" || !slackAllowed(record.slack?.grantHash, this.env))
+    if (
+      role !== "host" ||
+      !slackAllowed(
+        record.slack?.grantHash,
+        slackEnvironment(this.env, record.variant),
+      )
+    )
       throw new RequestError(403, "forbidden");
     if (
       Object.keys(command).some(
@@ -359,7 +377,10 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
       throw new RequestError(429, "slack_rate_limited");
     const source =
       command.permalink !== undefined
-        ? parseSlackPermalink(command.permalink)
+        ? parseSlackPermalink(
+            command.permalink,
+            themes[record.variant ?? "beer"].reaction,
+          )
         : state.source;
     if (!source) throw new RequestError(400, "slack_link");
     const id = crypto.randomUUID();
@@ -371,14 +392,19 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
     await this.ctx.storage.setAlarm(nextDeadline(record));
     try {
       const people = await new SlackReactionParticipantSource(
-        new SlackApiClient(this.env.SLACK_BOT_TOKEN!),
+        new SlackApiClient(
+          slackEnvironment(this.env, record.variant).SLACK_BOT_TOKEN!,
+        ),
       ).getParticipants(source);
       const current = this.read();
       if (
         !current ||
         Date.now() >= current.expiresAt ||
         current.slack?.importing?.id !== id ||
-        !slackAllowed(current.slack.grantHash, this.env)
+        !slackAllowed(
+          current.slack.grantHash,
+          slackEnvironment(this.env, current.variant),
+        )
       )
         throw new RequestError(409, "unavailable");
       reconcile(current, source, people, Date.now());
@@ -438,7 +464,12 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
       return;
     }
     if (job.status !== "pending" || job.readyAt > Date.now()) return;
-    if (!slackAllowed(record.slack!.grantHash, this.env)) {
+    if (
+      !slackAllowed(
+        record.slack!.grantHash,
+        slackEnvironment(this.env, record.variant),
+      )
+    ) {
       job.status = "failed";
       job.retryAt = Date.now() + 60000;
       record.revision++;
@@ -458,11 +489,16 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
     if (
       !current ||
       Date.now() >= current.expiresAt ||
-      !slackAllowed(current.slack?.grantHash, this.env)
+      !slackAllowed(
+        current.slack?.grantHash,
+        slackEnvironment(this.env, current.variant),
+      )
     )
       return;
     const result = await postResult(
-      new SlackApiClient(this.env.SLACK_BOT_TOKEN!),
+      new SlackApiClient(
+        slackEnvironment(this.env, record.variant).SLACK_BOT_TOKEN!,
+      ),
       job,
     );
     const latest = this.read();

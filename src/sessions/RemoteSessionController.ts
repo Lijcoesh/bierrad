@@ -1,3 +1,4 @@
+import type { WheelVariant } from "../../shared/variant";
 import type {
   Participant,
   ClientRole,
@@ -37,6 +38,7 @@ function endpoint(api: string, path: string): string {
 export async function createLiveSession(
   apiUrl: string,
   startCapability?: string,
+  variant: WheelVariant = "beer",
 ): Promise<CreatedSession> {
   const response = await fetch(
     endpoint(apiUrl, startCapability ? "/api/slack-sessions" : "/api/sessions"),
@@ -48,7 +50,7 @@ export async function createLiveSession(
           ? { Authorization: `Bearer ${startCapability}` }
           : {}),
       },
-      body: "{}",
+      body: JSON.stringify({ variant }),
       cache: "no-store",
       credentials: "omit",
       referrerPolicy: "no-referrer",
@@ -59,7 +61,7 @@ export async function createLiveSession(
     throw new Error(
       response.status === 429
         ? "Even rustig aan. Probeer over een minuut opnieuw."
-        : "Live Bierrad is even niet bereikbaar.",
+        : "Het live rad is even niet bereikbaar.",
     );
   return response.json() as Promise<CreatedSession>;
 }
@@ -146,6 +148,7 @@ export class RemoteSessionController implements SessionController {
     const session: BeerWheelSession = Object.freeze({
       id: "live",
       mode: "manual",
+      variant: dto.variant ?? "beer",
       participants: dto.participants,
       winnerCount: dto.winnerCount,
       state: dto.state,
@@ -174,8 +177,8 @@ export class RemoteSessionController implements SessionController {
     this.options.capability = "";
     this.publish(
       "unavailable",
-      empty(),
-      "🍻 Dit Bierrad is afgelopen of niet beschikbaar.",
+      { ...empty(), variant: this.snapshot.session.variant },
+      "Dit rad is afgelopen of niet beschikbaar.",
     );
   }
   private async request(path: string, command?: HostCommand) {
@@ -210,12 +213,11 @@ export class RemoteSessionController implements SessionController {
           "Plak een volledige Slack-berichtlink. Een threadlink verwijst naar het hoofdbericht.",
         slack_incomplete:
           "Slack gaf niet alle reagerende personen terug. Er is niets geïmporteerd.",
-        slack_too_many:
-          "Er passen maximaal 100 deelnemers in een live Bierrad.",
+        slack_too_many: "Er passen maximaal 100 deelnemers in een live rad.",
         slack_rate_limited:
           "Slack vraagt even geduld. Wacht minstens een minuut en probeer later opnieuw.",
         slack_rejected:
-          "Controleer of de Bierrad-bot toegang tot het gesprek heeft en de juiste rechten heeft.",
+          "Controleer of de Slack-bot toegang tot het gesprek heeft en de juiste rechten heeft.",
         slack_response:
           "Slack gaf geen volledige geldige deelnemerslijst terug. Je lijst is niet aangepast.",
         slack_unavailable:

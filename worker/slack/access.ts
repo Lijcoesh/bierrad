@@ -1,6 +1,9 @@
+import type { WheelVariant } from "../../shared/variant";
 import { equalHash, hashSecret } from "../auth";
 /** Optional server-only secrets; deliberately absent from Vite and public config. */
 export interface SlackSecrets {
+  COFFEE_SLACK_BOT_TOKEN?: string;
+  COFFEE_SLACK_START_GRANT?: string;
   SLACK_BOT_TOKEN?: string;
   SLACK_START_GRANT?: string;
 }
@@ -33,4 +36,19 @@ export function slackAllowed(
 ): boolean {
   const grant = currentGrant(env);
   return !!hash && !!grant && equalHash(hash, grant.hash);
+}
+
+export function slackEnvironment(
+  env: SlackSecrets,
+  variant: WheelVariant = "beer",
+): SlackSecrets {
+  return variant === "coffee"
+    ? {
+        SLACK_BOT_TOKEN: env.COFFEE_SLACK_BOT_TOKEN,
+        SLACK_START_GRANT: env.COFFEE_SLACK_START_GRANT,
+      }
+    : {
+        SLACK_BOT_TOKEN: env.SLACK_BOT_TOKEN,
+        SLACK_START_GRANT: env.SLACK_START_GRANT,
+      };
 }

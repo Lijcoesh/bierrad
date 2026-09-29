@@ -1,3 +1,5 @@
+import { useTheme } from "./Theme";
+import { localHash } from "../shared/variant";
 import { SlackControls, SlackResultStatus } from "./components/SlackControls";
 import { PlaybackClock } from "./hooks/PlaybackClock";
 import { useCallback, useState } from "react";
@@ -13,6 +15,7 @@ import type { SessionController } from "./sessions/SessionController";
 import { sessionWinners } from "./domain/drawEngine";
 
 export default function App({ controller }: { controller: SessionController }) {
+  const theme = useTheme();
   const {
     session,
     live,
@@ -25,7 +28,7 @@ export default function App({ controller }: { controller: SessionController }) {
   } = useBeerWheel(controller);
   const [uiNotice, setNotice] = useState("");
   const [secretOpen, setSecretOpen] = useState(false);
-  const [weights, setWeights] = useState(loadWeights);
+  const [weights, setWeights] = useState(() => loadWeights(theme.variant));
   const [forcedIds, setForcedIds] = useState<string[]>([]);
   const closeSecret = useCallback(() => setSecretOpen(false), []);
   const notice = error || sessionNotice || uiNotice;
@@ -46,22 +49,25 @@ export default function App({ controller }: { controller: SessionController }) {
   if (!capabilities.canViewSession)
     return (
       <div className="unavailable">
-        <h1>🍻 Dit Bierrad is afgelopen.</h1>
+        <h1>
+          {theme.icon} Dit {theme.name} is afgelopen.
+        </h1>
         <p>De link is verlopen of niet beschikbaar.</p>
-        <a href="./">Terug naar je eigen Bierrad</a>
+        <a href={localHash(theme.variant)}>Terug naar je eigen {theme.name}</a>
       </div>
     );
   return (
     <div className="app">
       <header>
-        <a className="brand" href="./">
-          🍻{" "}
+        <a className="brand" href={localHash(theme.variant)}>
+          {theme.icon}{" "}
           <strong>
-            bierrad<span>®</span>
+            {theme.name.toLowerCase()}
+            <span>®</span>
           </strong>
         </a>
         <span className="friday-badge">
-          <i /> Vrijdag begint hier
+          <i /> {theme.badge}
         </span>
         <button
           className="fullscreen"
@@ -78,6 +84,23 @@ export default function App({ controller }: { controller: SessionController }) {
           ⛶
         </button>
       </header>
+      {!live && (
+        <nav className="variant-switch" aria-label="Kies je rad">
+          {(["beer", "coffee"] as const).map((variant) => (
+            <a
+              key={variant}
+              href={localHash(variant)}
+              aria-current={theme.variant === variant ? "page" : undefined}
+              onClick={(event) => {
+                if (spinning) event.preventDefault();
+              }}
+              aria-disabled={spinning}
+            >
+              {variant === "beer" ? "🍻 Bierrad" : "☕ Koffierad"}
+            </a>
+          ))}
+        </nav>
+      )}
       <main>
         <div className="intro">
           <span className="eyebrow">GEEN DISCUSSIE. GEWOON DRAAIEN.</span>
@@ -86,9 +109,9 @@ export default function App({ controller }: { controller: SessionController }) {
               if (canRig && event.detail === 3) setSecretOpen(true);
             }}
           >
-            🍻 Bierrad 🎡
+            {theme.icon} {theme.name} 🎡
           </h1>
-          <p>Wie haalt deze week het bier?</p>
+          <p>{theme.question}</p>
         </div>
         {notice && (
           <p className="notice" role="status">
@@ -143,7 +166,7 @@ export default function App({ controller }: { controller: SessionController }) {
                       ? "Iedereen klaar? Daar gaan we…"
                       : spinning
                         ? "Het lot is in beweging…"
-                        : "🍻 DRAAI HET BIERRAD!"}
+                        : `${theme.icon} DRAAI HET ${theme.name.toUpperCase()}!`}
                   </button>
                 )}
                 <p className="helper">
@@ -153,7 +176,7 @@ export default function App({ controller }: { controller: SessionController }) {
                       ? "Kijk mee. De host bedient het rad."
                       : !session.participants.length
                         ? "Voeg minstens één deelnemer toe om te draaien."
-                        : `${session.winnerCount} ${session.winnerCount === 1 ? "bierhaler" : "unieke bierhalers"}. Eén druk op de knop.`}
+                        : `${session.winnerCount} ${session.winnerCount === 1 ? theme.haler : `unieke ${theme.haler}s`}. Eén druk op de knop.`}
                 </p>
               </div>
             )}
@@ -199,8 +222,8 @@ export default function App({ controller }: { controller: SessionController }) {
               <div>
                 <strong>Het rad beslist.</strong>
                 <p>
-                  Kies je bierbrigade. Alle raderen draaien tegelijk, ieder met
-                  een andere gelukkige.
+                  Kies je {theme.brigade}. Alle raderen draaien tegelijk, ieder
+                  met een andere gelukkige.
                 </p>
               </div>
             </div>
@@ -208,11 +231,11 @@ export default function App({ controller }: { controller: SessionController }) {
         </div>
       </main>
       <footer>
-        <span>Met liefde gebrouwen voor de vrijdagmiddag.</span>
+        <span>{theme.footer}</span>
         <span>
           {session.winnerCount}{" "}
-          {session.winnerCount === 1 ? "bierhaler" : "bierhalers"} <b>·</b> 0
-          discussies <b>·</b> 100% toeval
+          {session.winnerCount === 1 ? theme.haler : `${theme.haler}s`} <b>·</b>{" "}
+          0 discussies <b>·</b> 100% toeval
         </span>
       </footer>
       {finished && <Confetti key={session.activeDraw?.id} />}
@@ -226,7 +249,7 @@ export default function App({ controller }: { controller: SessionController }) {
             if (weight === 1) delete next[id];
             else next[id] = weight;
             setWeights(next);
-            saveWeights(next);
+            saveWeights(next, theme.variant);
           }}
           onForced={(id, forced) =>
             setForcedIds((ids) =>

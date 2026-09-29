@@ -1,3 +1,4 @@
+import { useTheme } from "../Theme";
 import type { Participant, SpinInstruction } from "../domain/models";
 import { useWheelAnimation } from "../hooks/useWheelAnimation";
 export const colors = [
@@ -19,6 +20,20 @@ export function BeerWheel({
   spin?: SpinInstruction;
   spinning: boolean;
 }) {
+  const theme = useTheme();
+  const palette =
+    theme.variant === "coffee"
+      ? [
+          "#d7a575",
+          "#ebc9a6",
+          "#91aaa0",
+          "#f4dfbb",
+          "#b9a6bc",
+          "#caa58b",
+          "#bec9a7",
+          "#e6baab",
+        ]
+      : colors;
   const ref = useWheelAnimation(spin);
   const displayed = people.length
     ? people
@@ -36,7 +51,7 @@ export function BeerWheel({
         viewBox="0 0 420 420"
         data-dense={people.length > 24}
         role="img"
-        aria-label={`Bierrad met ${people.length} deelnemers`}
+        aria-label={`${theme.name} met ${people.length} deelnemers`}
       >
         <circle cx="210" cy="210" r="209" fill="#292820" />
         <circle cx="210" cy="210" r="201" fill="#fff8e9" />
@@ -46,11 +61,11 @@ export function BeerWheel({
           return (
             <g key={p.id}>
               {displayed.length === 1 ? (
-                <circle cx="210" cy="210" r="194" fill={colors[0]} />
+                <circle cx="210" cy="210" r="194" fill={palette[0]} />
               ) : (
                 <path
                   d={`M 210 210 L ${a.join(" ")} A 194 194 0 ${step > 180 ? 1 : 0} 1 ${b.join(" ")} Z`}
-                  fill={colors[i % colors.length]}
+                  fill={palette[i % palette.length]}
                   stroke="#fff8e9"
                   strokeWidth="2"
                 />
@@ -83,11 +98,11 @@ export function BeerWheel({
         })}
       </svg>
       <div className="wheel-hub" aria-hidden="true">
-        🍻
+        {theme.icon}
       </div>
       {!people.length && (
         <div className="empty-wheel">
-          Jouw vrijdagploeg
+          Jouw {theme.crew}
           <br />
           <strong>hoort hier thuis.</strong>
         </div>

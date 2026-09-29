@@ -1,3 +1,5 @@
+import { VariantContext, useTheme } from "./Theme";
+import { localHash, themes, type WheelVariant } from "../shared/variant";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import App from "./App";
 import { LocalSessionController } from "./sessions/LocalSessionController";
@@ -20,29 +22,33 @@ export function SessionRoot() {
     window.addEventListener("hashchange", change);
     return () => window.removeEventListener("hashchange", change);
   }, []);
-  const invite = /^#\/slack-start\/([a-f0-9]{64})$/.exec(hash);
+  const invite = /^#\/(coffee-)?slack-start\/([a-f0-9]{64})$/.exec(hash);
   return invite ? (
-    <SlackStart key={hash} capability={invite[1]} />
+    <VariantContext.Provider value={invite[1] ? "coffee" : "beer"}>
+      <SlackStart key={hash} capability={invite[2]} />
+    </VariantContext.Provider>
   ) : (
     <SessionPage key={hash} hash={hash} />
   );
 }
 function SessionPage({ hash }: { hash: string }) {
+  const variant: WheelVariant = hash === "#/coffee" ? "coffee" : "beer";
+  const local = !hash || hash === "#/beer" || hash === "#/coffee";
   const apiUrl = configuredApiUrl();
   const route = parseLiveRoute(hash);
   const [controller, setController] = useState<
     LocalSessionController | RemoteSessionController
   >();
   useEffect(() => {
-    if (hash && (!route || !apiUrl)) return;
+    if (!local && (!route || !apiUrl)) return;
     let current: LocalSessionController | RemoteSessionController;
     if (route && apiUrl)
       current = new RemoteSessionController({ ...route, apiUrl });
     else {
-      const source = new ManualParticipantSource();
+      const source = new ManualParticipantSource(variant);
       current = new LocalSessionController({
         source,
-        preference: new LocalWinnerCountPreference(),
+        preference: new LocalWinnerCountPreference(variant),
         saveParticipants: (p) => source.save(p),
       });
     }
@@ -50,7 +56,7 @@ function SessionPage({ hash }: { hash: string }) {
     void current.initialize();
     return () => current.dispose();
   }, [hash, apiUrl]);
-  if (hash && (!route || !apiUrl))
+  if (!local && (!route || !apiUrl))
     return (
       <div className="unavailable">
         <h1>🍻 Live Bierrad is niet beschikbaar.</h1>
@@ -60,17 +66,44 @@ function SessionPage({ hash }: { hash: string }) {
         <a href="./">Open een lokaal Bierrad</a>
       </div>
     );
-  if (!controller)
-    return <p className="notice">Het Bierrad wordt klaargezet…</p>;
+  if (!controller) return <p className="notice">Het rad wordt klaargezet…</p>;
   return (
-    <>
+    <SessionTheme controller={controller} fallback={variant}>
       <LiveBar
         controller={controller}
         apiUrl={apiUrl}
         spectatorCapability={route?.spectatorCapability}
       />
       <App controller={controller} />
-    </>
+    </SessionTheme>
+  );
+}
+function SessionTheme({
+  controller,
+  fallback,
+  children,
+}: {
+  controller: LocalSessionController | RemoteSessionController;
+  fallback: WheelVariant;
+  children: import("react").ReactNode;
+}) {
+  const snapshot = useSyncExternalStore(
+    controller.subscribe,
+    controller.getSnapshot,
+    controller.getSnapshot,
+  );
+  const variant = snapshot.session.variant ?? fallback;
+  useEffect(() => {
+    document.documentElement.dataset.variant = variant;
+    document.title = themes[variant].name + " — Wie haalt de volgende ronde?";
+    const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (icon)
+      icon.href = variant === "coffee" ? "./coffee-icon.svg" : "./favicon.svg";
+  }, [variant]);
+  return (
+    <VariantContext.Provider value={variant}>
+      {children}
+    </VariantContext.Provider>
   );
 }
 function LiveBar({
@@ -82,6 +115,7 @@ function LiveBar({
   apiUrl?: string;
   spectatorCapability?: string;
 }) {
+  const theme = useTheme();
   const { live, capabilities } = useSyncExternalStore(
     controller.subscribe,
     controller.getSnapshot,
@@ -94,7 +128,7 @@ function LiveBar({
     setPending(true);
     setNotice("");
     try {
-      const created = await createLiveSession(apiUrl);
+      const created = await createLiveSession(apiUrl, undefined, theme.variant);
       // Fragment survives reload, but is never sent to Pages or stored in web storage.
       location.hash = `/host/${created.hostCapability}/${created.spectatorCapability}`;
     } catch (error) {
@@ -111,7 +145,7 @@ function LiveBar({
         {!live
           ? "Alleen op dit scherm"
           : live.role === "host"
-            ? "● Jij organiseert · Live Bierrad"
+            ? `● Jij organiseert · Live ${theme.name}`
             : "● Je kijkt live mee"}
       </span>
       {live && (
@@ -131,7 +165,7 @@ function LiveBar({
           disabled={pending || !capabilities.canReset}
           onClick={() => void create()}
         >
-          Start live Bierrad ↗
+          Start live {theme.name} ↗
         </button>
       )}
       {live?.role === "host" &&
@@ -161,7 +195,7 @@ function LiveBar({
           onClick={() => {
             if (
               window.confirm(
-                "Dit live Bierrad beëindigen? Alle kijklinks vervallen en de deelnemers worden gewist.",
+                `Dit live ${theme.name} beëindigen? Alle kijklinks vervallen en de deelnemers worden gewist.`,
               )
             )
               void (controller as RemoteSessionController)
@@ -174,22 +208,29 @@ function LiveBar({
           Live beëindigen
         </button>
       )}
-      {live && <a href="./">Eigen Bierrad</a>}
+      {live && <a href={localHash(theme.variant)}>Eigen {theme.name}</a>}
       {notice && <p role="status">{notice}</p>}
     </div>
   );
 }
 
 function SlackStart({ capability }: { capability: string }) {
+  const theme = useTheme();
+  useEffect(() => {
+    document.documentElement.dataset.variant = theme.variant;
+    document.title = theme.name;
+  }, [theme.variant, theme.name]);
   const [pending, setPending] = useState(false),
     [error, setError] = useState("");
   const api = configuredApiUrl();
   return (
     <div className="unavailable">
-      <h1>🍻 Jouw vrijdag begint hier.</h1>
+      <h1>
+        {theme.icon} {theme.badge}.
+      </h1>
       <p>
-        Start een tijdelijk live Bierrad met Slack. Bewaar deze startlink voor
-        organisatoren; deel straks alleen de kijklink.
+        Start een tijdelijk live {theme.name} met Slack. Bewaar deze startlink
+        voor organisatoren; deel straks alleen de kijklink.
       </p>
       <button
         className="primary"
@@ -197,7 +238,7 @@ function SlackStart({ capability }: { capability: string }) {
         onClick={() => {
           setPending(true);
           setError("");
-          void createLiveSession(api!, capability)
+          void createLiveSession(api!, capability, theme.variant)
             .then((created) => {
               location.replace(
                 `${location.pathname}#/host/${created.hostCapability}/${created.spectatorCapability}`,
@@ -211,11 +252,13 @@ function SlackStart({ capability }: { capability: string }) {
             });
         }}
       >
-        {pending ? "Klaarzetten…" : "Start Bierrad met Slack 🍻"}
+        {pending
+          ? "Klaarzetten…"
+          : `Start ${theme.name} met Slack ${theme.icon}`}
       </button>
       {error && <p role="alert">{error}</p>}
       <p>
-        <a href="./">Liever handmatig draaien</a>
+        <a href={localHash(theme.variant)}>Liever handmatig draaien</a>
       </p>
     </div>
   );

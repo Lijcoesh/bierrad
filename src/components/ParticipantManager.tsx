@@ -1,3 +1,4 @@
+import { useTheme } from "../Theme";
 import { useState } from "react";
 import type { Participant } from "../domain/models";
 import { addParticipant, removeParticipant } from "../utils/participants";
@@ -19,6 +20,7 @@ export function ParticipantManager({
   onChange: (p: Participant[]) => void;
   onRestore: () => void;
 }) {
+  const theme = useTheme();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState(false);
@@ -26,7 +28,7 @@ export function ParticipantManager({
     <aside className="participant-card">
       <div className="card-heading">
         <div>
-          <span className="eyebrow">DE VRIJDAGPLOEG</span>
+          <span className="eyebrow">DE {theme.crew.toUpperCase()}</span>
           <h2>Wie doet er mee?</h2>
         </div>
         <span className="count">{people.length}</span>
@@ -133,7 +135,7 @@ export function ParticipantManager({
           )}
           <p className="storage-note">
             {live
-              ? "Alleen tijdelijk bewaard voor dit live Bierrad."
+              ? `Alleen tijdelijk bewaard voor dit live ${theme.name}.`
               : "▣ Je lijst wordt op dit apparaat bewaard."}
           </p>
         </>

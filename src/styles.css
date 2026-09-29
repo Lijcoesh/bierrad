@@ -840,7 +840,9 @@ footer b {
 }
 .secret-heading h2 {
   margin: 0;
-  font: 800 20px Outfit, sans-serif;
+  font:
+    800 20px Outfit,
+    sans-serif;
 }
 .secret-heading button {
   border: 0;
@@ -893,4 +895,62 @@ footer b {
 .secret-panel input[type="checkbox"] {
   width: auto;
   margin: 0;
+}
+
+/* Both variants share layout and deterministic wheel motion. */
+.variant-switch {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 24px auto 0;
+  padding: 5px;
+  border: 1px solid #dfd4c4;
+  border-radius: 32px;
+  width: fit-content;
+  background: #fffaf3;
+}
+.variant-switch a {
+  padding: 10px 20px;
+  border-radius: 24px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.variant-switch a[aria-current="page"] {
+  background: #302e26;
+  color: #fffaf3;
+}
+.variant-switch a[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+:root[data-variant="coffee"] {
+  color: #3c2b24;
+  background: #f6efe5;
+}
+[data-variant="coffee"] .primary {
+  background: #724831;
+  color: #fff8ee;
+  border-color: #593825;
+  box-shadow: 0 5px 0 #442d22;
+}
+[data-variant="coffee"] .primary:hover:not(:disabled) {
+  background: #86573e;
+}
+[data-variant="coffee"] .friday-badge {
+  background: #e9ddcc;
+  border-color: #d9c5af;
+}
+[data-variant="coffee"] .wheel-hub {
+  background: #fff4e4;
+}
+[data-variant="coffee"] .variant-switch a[aria-current="page"] {
+  background: #724831;
+}
+[data-variant="coffee"] .final-result {
+  background: #eee1cf;
+  border-color: #c7a17e;
+}
+[data-variant="coffee"] .count,
+[data-variant="coffee"] .count-stepper {
+  background: #ecddc9;
 }

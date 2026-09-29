@@ -44,7 +44,7 @@ function fixture(serverNow: number): PublicBeerWheelSession {
 }
 test("remote late join uses server state and clock offset, rejects spectator commands, never persists participants", async (t) => {
   const serverNow = Date.now() + 60000;
-  const dto = fixture(serverNow);
+  const dto = { ...fixture(serverNow), variant: "coffee" as const };
   t.mock.method(crypto, "getRandomValues", () => {
     throw new Error("No client winner selection");
   });
@@ -89,6 +89,7 @@ test("remote late join uses server state and clock offset, rejects spectator com
       serverNow,
     });
     assert.equal(controller.getSnapshot().live?.status, "connected");
+    assert.equal(controller.getSnapshot().session.variant, "coffee");
     assert.ok(Math.abs(controller.getSnapshot().clockOffsetMs! - 60000) < 500);
     assert.deepEqual(
       controller.getSnapshot().session.activeDraw,
@@ -112,6 +113,7 @@ test("remote late join uses server state and clock offset, rejects spectator com
     socket.deliver({ type: "unavailable" });
     assert.equal(controller.getSnapshot().session.participants.length, 0);
     assert.equal(controller.getSnapshot().session.activeDraw, undefined);
+    assert.equal(controller.getSnapshot().session.variant, "coffee");
     assert.equal(controller.getSnapshot().capabilities.canViewSession, false);
   } finally {
     controller.dispose();

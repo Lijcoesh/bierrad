@@ -1,3 +1,4 @@
+import { useTheme } from "../Theme";
 import { useEffect, useState } from "react";
 import type { SlackHostStatus } from "../../shared/protocol";
 export function SlackControls({
@@ -11,6 +12,7 @@ export function SlackControls({
   onImport: (link?: string) => Promise<void>;
   onManual: () => Promise<void>;
 }) {
+  const theme = useTheme();
   const [tab, setTab] = useState(status.source),
     [link, setLink] = useState("");
   const [error, setError] = useState("");
@@ -44,7 +46,7 @@ export function SlackControls({
           disabled={busy || !status.enabled}
           onClick={() => setTab("slack")}
         >
-          Slack 🍻
+          Slack {theme.icon}
         </button>
       </div>
       {!status.enabled && (
@@ -73,21 +75,24 @@ export function SlackControls({
               autoComplete="off"
               spellCheck={false}
             />
-            <p>We kijken naar 🍻 :beers: op het hoofdbericht.</p>
+            <p>
+              We kijken naar {theme.icon} :{theme.reaction}: op het
+              hoofdbericht.
+            </p>
             <button
               className="primary"
               disabled={busy || !status.enabled || !link}
             >
               {status.importing
                 ? "Deelnemers ophalen…"
-                : "🍻 Deelnemers ophalen"}
+                : `${theme.icon} Deelnemers ophalen`}
             </button>
           </form>
           {status.source === "slack" && (
             <>
               <p role="status">
                 {status.count === 0
-                  ? "Niemand heeft met 🍻 gereageerd."
+                  ? `Niemand heeft met ${theme.icon} gereageerd.`
                   : `✓ Slack gekoppeld · ${status.count ?? 0} deelnemers`}
                 <br />
                 <small>

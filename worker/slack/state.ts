@@ -1,3 +1,4 @@
+import { themes } from "../../shared/variant";
 import { createSession } from "../../src/domain/drawEngine";
 import type { StoredSession } from "../session";
 import { RequestError } from "../session";
@@ -86,7 +87,11 @@ export function queueResult(record: StoredSession) {
   };
 }
 export function resultBody(job: SlackJob) {
-  const text = `🍻 Het rad heeft gesproken!\n${job.names.join(" · ")}\n${job.names.length === 1 ? "Jij mag bier halen!" : "Jullie mogen bier halen!"}`;
+  const theme =
+    themes[job.source.reactionName === "coffee" ? "coffee" : "beer"];
+  const heading = `${theme.icon} Het rad heeft gesproken!\n`;
+  const ending = `${job.names.length === 1 ? "Jij mag" : "Jullie mogen"} ${theme.drink} halen!`;
+  const text = `${heading}${job.names.join(" · ")}\n${ending}`;
   const escaped = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -95,7 +100,7 @@ export function resultBody(job: SlackJob) {
   const elements: (
     | { type: "text"; text: string }
     | { type: "user"; user_id: string }
-  )[] = [{ type: "text", text: "🍻 Het rad heeft gesproken!\n" }];
+  )[] = [{ type: "text", text: heading }];
   job.names.forEach((name, index) => {
     if (index) elements.push({ type: "text", text: " · " });
     const id = job.mentionIds?.[index];
@@ -107,7 +112,7 @@ export function resultBody(job: SlackJob) {
   });
   elements.push({
     type: "text",
-    text: `\n${job.names.length === 1 ? "Jij mag bier halen!" : "Jullie mogen bier halen!"}`,
+    text: `\n${ending}`,
   });
   return {
     channel: job.source.channelId,

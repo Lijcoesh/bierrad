@@ -169,3 +169,9 @@ SessionController → Draw Engine → DrawInstruction → Wheel Renderers
 ```
 
 `worker/slack` bevat de getypeerde client, parser, deelnemersbron, private mapping en resultaattekst. `POST /api/slack-sessions` vereist de aparte startcapability in Authorization; overige hostcommando's zijn `slackImport` (optioneel permalink, zonder link = refresh), `slackManual`, `slackRetry`. Ook gemanipuleerde spectatorrequests worden afgewezen. Spectator-DTO's bevatten geen Slack-metadata. De raderen/selectie zijn ongewijzigd en blijven zonder netwerk of Slack functioneren.
+
+## Koffierad ☕
+
+Naast Bierrad is er **Koffierad: wie haalt de volgende koffie?** Kies bovenaan je variant of open de site met `#/coffee` (bier: `#/beer`; de bestaande lege route blijft Bierrad). Beide gebruiken dezelfde radlogica. Koffie heeft warme crème-/espressokleuren en eigen teksten, deelnemersopslag en aantalvoorkeur. Wisselen start een lokale variant; tijdens draaien is de wissel geblokkeerd. Er is geen permanente uitslaghistorie.
+
+De variant van een live-sessie staat vanaf creatie vast op de server; host en kijkers ontvangen hetzelfde thema. Oude sessies en links blijven bier. `POST /api/sessions` en `POST /api/slack-sessions` accepteren `{}` voor bier of een body met uitsluitend `variant`, met waarde `beer` of `coffee`. Koffie krijgt een **eigen Slack-app** met eigen servercredentials, privé-startlink, `:coffee:`-reacties en koffie-uitslagen. Zie [Koffierad instellen](docs/slack-setup.md#aparte-koffierad-app). De implementatie gebruikt privé-startlinks, geen slashcommando's of automatische kanaalposts.

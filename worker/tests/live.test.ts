@@ -38,6 +38,7 @@ test("capabilities use 256 secure random bits and hashes; DTO is explicitly mini
   assert.deepEqual(
     Object.keys(dto).sort(),
     [
+      "variant",
       "participants",
       "winnerCount",
       "state",

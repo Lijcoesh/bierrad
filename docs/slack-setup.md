@@ -62,3 +62,25 @@ Upload `public/slack-icon.png` (1024 × 1024) in de Slack-appinstellingen onder 
 Nieuwe trekkingen vermelden Slack-winnaars met het officiële [rich-text user-element](https://docs.slack.dev/reference/block-kit/block-elements/user-element/). Slack toont hun actuele weergavenaam. Alleen door de server uit de importmapping verkregen identiteiten worden vermeld; ingevoerde namen kunnen geen @here/@channel of andere mentions injecteren. Bestaande pending jobs zonder mentionmapping blijven als tekst werken. Bestaande Slack-berichten worden niet gewijzigd. De tekstfallback voor meldingen/screenreaders bevat leesbare namen.
 
 PNG opnieuw exporteren zonder projectdependency: `npx --yes --registry=https://registry.npmjs.org @resvg/resvg-js-cli@2.6.2-beta.1 --no-system-font public/slack-icon.svg public/slack-icon.png`.
+
+## Aparte Koffierad-app
+
+Maak een **nieuwe** app From a manifest met [slack-coffee-app-manifest.json](slack-coffee-app-manifest.json), installeer haar in de gewenste workspace en nodig de Koffierad-bot uit in het koffiekanaal. De bestaande Bierrad-app blijft bestaan. Upload [coffee-icon.png](../public/coffee-icon.png) (1024 × 1024) bij Basic Information → Display Information → App icon. De vectorbron is [coffee-icon.svg](../public/coffee-icon.svg).
+
+De scopes zijn dezelfde drie minimale scopes als bij bier: `reactions:read`, `users:read`, `chat:write`. Er zijn geen slashcommando's, events, webhooks, signing secrets of extra scopes. Gebruik de privé-startlink voor organisatoren en laat collega's met **☕ `:coffee:`** op het gekozen bericht reageren.
+
+Bewaar het **nieuwe** bot-token interactief, uitsluitend in het volgende Worker-secret:
+
+```sh
+npx wrangler secret put COFFEE_SLACK_BOT_TOKEN --env=""
+node scripts/slack-start-link.mjs create --coffee
+node scripts/slack-start-link.mjs publish --coffee
+```
+
+De koffie-startlink staat privé in `.private-slack/coffee/start-link.txt` en gebruikt `#/coffee-slack-start/<capability>`. De aparte hash/expiry wordt gepubliceerd als `COFFEE_SLACK_START_GRANT`. Ook deze link is standaard zeven dagen geldig; met `create http://127.0.0.1:5173/ 1 --coffee` maak je een lokale testlink. Gebruik dan de koffie-secretnamen in genegeerde dev-vars en publiceer de testgrant niet naar productie. Geef tokens/startlinks nooit door via chat of publieke configuratie.
+
+Intrekken of roteren werkt per app: verwijderen/roteren van `COFFEE_SLACK_START_GRANT` schakelt nieuwe koffie-imports en posts uit, zonder de biergrant te veranderen. Reeds geïmporteerde deelnemers volgen de bestaande sessie-TTL. Voor een nieuwe koffiegrant gelden dezelfde exclusieve bestandscreatie en bewuste verwijdering van oude lokale bestanden als bij bier.
+
+De server selecteert de bot en reactie uit de onveranderlijke sessievariant; er is geen fallback naar de bierbot als koffie niet is ingesteld. Een bier-startcapability werkt niet voor koffie en omgekeerd (provisioneer verschillende grants). Het hoofdbericht mag beide reacties bevatten; iedere variant leest uitsluitend zijn eigen reactie. Refresh en officiële @vermeldingen blijven gelijk werken.
+
+Publicatievolgorde: eerst de compatibele Worker, vervolgens de frontend; configureer daarna de koffie-appsecrets en starttoegang. Zonder koffiecredentials blijven lokaal en handmatig live draaien beschikbaar. Test na installatie met synthetische deelnemers dat alleen ☕ meetelt, twee kijkers dezelfde koffie-uitslag zien en precies één threadreply van de **Koffierad-bot** verschijnt, ook als de host sluit. Het toevoegen van deze broncode installeert of activeert de Slack-app nog niet.

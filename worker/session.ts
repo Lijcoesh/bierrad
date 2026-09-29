@@ -1,3 +1,4 @@
+import type { WheelVariant } from "../shared/variant";
 import { queueResult, type SlackState } from "./slack/state";
 import {
   createSession,
@@ -20,6 +21,7 @@ export class RequestError extends Error {
   }
 }
 export interface StoredSession {
+  variant?: WheelVariant;
   session: BeerWheelSession;
   hostHash: string;
   spectatorHash: string;
@@ -36,8 +38,10 @@ export function newSession(
   hostHash: string,
   spectatorHash: string,
   now: number,
+  variant: WheelVariant = "beer",
 ): StoredSession {
   return {
+    variant,
     session: createSession(crypto.randomUUID()),
     hostHash,
     spectatorHash,
@@ -53,6 +57,7 @@ export function newSession(
 export function publicSession(record: StoredSession): PublicBeerWheelSession {
   const s = record.session;
   return {
+    variant: record.variant ?? "beer",
     participants: s.participants.map((p) => ({ id: p.id, name: p.name })),
     winnerCount: s.winnerCount,
     state: s.state,

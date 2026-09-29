@@ -1,9 +1,14 @@
+import type { WheelVariant } from "../../shared/variant";
 export interface Participant {
   readonly id: string;
   readonly name: string;
 }
 export type DrawState =
-  "setup" | "ready" | "countdown" | "spinning" | "finished";
+  | "setup"
+  | "ready"
+  | "countdown"
+  | "spinning"
+  | "finished";
 export type ClientRole = "host" | "spectator";
 /** Serializable playback, degrees clockwise from the top and UTC start time. */
 export interface SpinInstruction {
@@ -25,6 +30,7 @@ export interface DrawInstruction {
   readonly spins: readonly SpinInstruction[];
 }
 export interface BeerWheelSession {
+  readonly variant?: WheelVariant;
   readonly id: string;
   readonly participants: readonly Participant[];
   readonly winnerCount: number;

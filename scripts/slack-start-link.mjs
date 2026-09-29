@@ -2,13 +2,17 @@ import { randomBytes, createHash } from "node:crypto";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 // Provisioning tool, never imported into the app. No token/link is printed.
-const mode = process.argv[2];
-const directory = new URL("../.private-slack/", import.meta.url);
+const coffee = process.argv.includes("--coffee");
+const args = process.argv.slice(2).filter((arg) => arg !== "--coffee");
+const mode = args[0];
+const grantName = coffee ? "COFFEE_SLACK_START_GRANT" : "SLACK_START_GRANT";
+const directory = new URL(
+  coffee ? "../.private-slack/coffee/" : "../.private-slack/",
+  import.meta.url,
+);
 const grantFile = new URL("grant.json", directory);
 if (mode === "create") {
-  const origin = new URL(
-    process.argv[3] ?? "https://timzegveld.github.io/bierrad/",
-  );
+  const origin = new URL(args[1] ?? "https://timzegveld.github.io/bierrad/");
   if (
     origin.username ||
     origin.password ||
@@ -21,7 +25,7 @@ if (mode === "create") {
       ))
   )
     throw new Error("Gebruik een geldige frontend-URL.");
-  const days = Number(process.argv[4] ?? 7);
+  const days = Number(args[2] ?? 7);
   if (!Number.isInteger(days) || days < 1 || days > 30)
     throw new Error("Geldigheid: 1 tot 30 dagen.");
   const secret = randomBytes(32).toString("hex");
@@ -37,11 +41,11 @@ if (mode === "create") {
   });
   await writeFile(
     new URL("start-link.txt", directory),
-    `${origin.href}#/slack-start/${secret}\n`,
+    `${origin.href}#/${coffee ? "coffee-" : ""}slack-start/${secret}\n`,
     { flag: "wx", mode: 0o600 },
   );
   console.log(
-    "Startlink lokaal opgeslagen in .private-slack/start-link.txt (niet delen met kijkers). Publiceer daarna de grant.",
+    `Startlink lokaal opgeslagen in .private-slack/${coffee ? "coffee/" : ""}start-link.txt (niet delen met kijkers). Publiceer daarna de grant.`,
   );
 } else if (mode === "publish") {
   const grant = JSON.parse(await readFile(grantFile, "utf8"));
@@ -59,7 +63,7 @@ if (mode === "create") {
   const { fileURLToPath } = await import("node:url");
   const result = spawnSync(
     process.execPath,
-    [fileURLToPath(wrangler), "secret", "put", "SLACK_START_GRANT", "--env="],
+    [fileURLToPath(wrangler), "secret", "put", grantName, "--env="],
     {
       input: JSON.stringify(grant),
       encoding: "utf8",
@@ -78,7 +82,7 @@ if (mode === "create") {
     );
 } else {
   console.log(
-    "Gebruik: node scripts/slack-start-link.mjs create [frontend-url] [dagen=7] | publish",
+    "Gebruik: node scripts/slack-start-link.mjs create [frontend-url] [dagen=7] [--coffee] | publish [--coffee]",
   );
   process.exitCode = 1;
 }
