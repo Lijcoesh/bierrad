@@ -28,6 +28,7 @@ const clock: SessionClock = {
   },
 };
 interface Options {
+  freshStart?: boolean;
   role?: ClientRole;
   source?: ParticipantSource;
   saveParticipants?: (participants: readonly Participant[]) => void;
@@ -49,7 +50,7 @@ export class LocalSessionController implements SessionController {
     this.clock = options.clock ?? clock;
     this.role = options.role ?? "host";
     try {
-      const preferred = options.preference?.load();
+      const preferred = options.freshStart ? undefined : options.preference?.load();
       if (
         preferred !== undefined &&
         Number.isSafeInteger(preferred) &&
@@ -104,7 +105,7 @@ export class LocalSessionController implements SessionController {
   }
   initialize(): Promise<void> {
     return (this.initialization ??=
-      this.options.source && this.role === "host"
+      !this.options.freshStart && this.options.source && this.role === "host"
         ? this.restoreParticipants()
         : Promise.resolve());
   }

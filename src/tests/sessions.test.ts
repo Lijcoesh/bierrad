@@ -411,6 +411,30 @@ test("storage failure preserves manual use and restored rosters keep the preferr
   blocked.dispose();
 });
 
+test("fresh personal sessions ignore previous settings and restore names only on request", async () => {
+  let reads = 0;
+  const options = {
+    freshStart: true,
+    source: { getParticipants: async () => { reads++; return people; } },
+    preference: { load: () => { throw new Error("Must not load old preferences"); }, save: () => {} },
+  };
+  const first = new LocalSessionController(options);
+  await first.initialize();
+  assert.deepEqual(first.getSnapshot().session.participants, []);
+  assert.equal(reads, 0);
+  await first.restoreParticipants();
+  assert.equal(reads, 1);
+  assert.equal(first.getSnapshot().session.winnerCount, 2);
+  await first.setWinnerCount(3);
+  first.dispose();
+  const reopened = new LocalSessionController(options);
+  await reopened.initialize();
+  assert.deepEqual(reopened.getSnapshot().session.participants, []);
+  await reopened.setParticipants(people);
+  assert.equal(reopened.getSnapshot().session.winnerCount, 2);
+  reopened.dispose();
+});
+
 test("local winner preference persists values and recovers from invalid stored values", () => {
   let value: string | null = null;
   Object.defineProperty(globalThis, "localStorage", {

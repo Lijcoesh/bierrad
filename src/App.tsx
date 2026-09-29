@@ -9,7 +9,6 @@ import { ParticipantManager } from "./components/ParticipantManager";
 import { FinalResult } from "./components/FinalResult";
 import { Confetti } from "./components/Confetti";
 import { SecretPanel } from "./components/SecretPanel";
-import { loadWeights, saveWeights } from "./services/RigPreference";
 import { useBeerWheel } from "./hooks/useBeerWheel";
 import type { SessionController } from "./sessions/SessionController";
 import { sessionWinners } from "./domain/drawEngine";
@@ -28,7 +27,7 @@ export default function App({ controller }: { controller: SessionController }) {
   } = useBeerWheel(controller);
   const [uiNotice, setNotice] = useState("");
   const [secretOpen, setSecretOpen] = useState(false);
-  const [weights, setWeights] = useState(() => loadWeights(theme.variant));
+  const [weights, setWeights] = useState<Record<string, number>>({});
   const [forcedIds, setForcedIds] = useState<string[]>([]);
   const closeSecret = useCallback(() => setSecretOpen(false), []);
   const notice = error || sessionNotice || uiNotice;
@@ -249,7 +248,6 @@ export default function App({ controller }: { controller: SessionController }) {
             if (weight === 1) delete next[id];
             else next[id] = weight;
             setWeights(next);
-            saveWeights(next, theme.variant);
           }}
           onForced={(id, forced) =>
             setForcedIds((ids) =>

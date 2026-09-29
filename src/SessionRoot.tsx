@@ -47,6 +47,7 @@ function SessionPage({ hash }: { hash: string }) {
     else {
       const source = new ManualParticipantSource(variant);
       current = new LocalSessionController({
+        freshStart: true,
         source,
         preference: new LocalWinnerCountPreference(variant),
         saveParticipants: (p) => source.save(p),

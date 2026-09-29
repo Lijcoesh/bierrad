@@ -184,7 +184,7 @@ Het moet voelen alsof het rad nét langs andere kandidaten kruipt voordat het st
 
 **Een trekking selecteert een instelbaar aantal unieke bierhalers.**
 
-De standaardvoorkeur is twee; één bierhaler of een grotere groep is net zo natuurlijk. Het aantal mag nooit groter zijn dan de deelnemerslijst. Als de lijst kleiner wordt, past het effectieve aantal zich aan. De expliciete voorkeur wordt lokaal onthouden.
+De standaardvoorkeur is twee; één bierhaler of een grotere groep is net zo natuurlijk. Het aantal mag nooit groter zijn dan de deelnemerslijst. Als de lijst kleiner wordt, past het effectieve aantal zich aan. Een persoonlijk rad begint bij openen opnieuw met de standaardvoorkeur.
 
 Iedere winnaar krijgt een eigen rad. Alle raderen tonen de volledige deelnemerspool en starten op hetzelfde moment. Namen worden niet uit andere raderen verwijderd: centrale selectie zonder teruglegging garandeert verschillende winnaars.
 
@@ -231,7 +231,7 @@ Daarin kunnen gebruikers:
 - het aantal bierhalers kiezen;
 - alle raderen tegelijk starten.
 
-De lijst wordt lokaal onthouden.
+Een persoonlijk rad begint bij openen of verversen leeg, zonder eerdere instellingen of aangepaste winkansen. De vorige handmatige lijst blijft lokaal beschikbaar om bewust via de herstelknop terug te halen. Live-raden behouden hun stand via hun eigen tijdelijke link.
 
 Hierdoor blijft Bierrad bruikbaar wanneer:
 
@@ -507,6 +507,6 @@ LocalSessionController en RemoteSessionController gebruiken dezelfde radcomponen
 
 # Koffierad — uitbreiding 2026-09-28
 
-Koffierad bepaalt uitsluitend **wie koffie haalt**, niet wie koffie zet of welke koffiesoort iemand drinkt. Dezelfde spanning, deterministische raderen en standalone bruikbaarheid gelden voor beide varianten. De website biedt een wissel en directe koffielink. Lokale deelnemers en voorkeuren blijven gescheiden; live-sessies hebben één onveranderlijke variant.
+Koffierad bepaalt uitsluitend **wie koffie haalt**, niet wie koffie zet of welke koffiesoort iemand drinkt. Dezelfde spanning, deterministische raderen en standalone bruikbaarheid gelden voor beide varianten. De website biedt een wissel en directe koffielink. Persoonlijke raden starten leeg met standaardinstellingen; eerder ingevoerde deelnemers kunnen per variant bewust worden hersteld; live-sessies hebben één onveranderlijke variant.
 
 Slack blijft de ingang: een aparte Koffierad-app importeert uitsluitend `:coffee:` op het gekozen hoofdbericht en publiceert de serveruitslag in dezelfde thread, met ☕ en officiële winnaarvermeldingen. Bier behoudt `:beers:`. Elke app heeft eigen servercredentials en organisator-starttoegang. Slashcommando's en automatische planning zijn niet geïmplementeerd.

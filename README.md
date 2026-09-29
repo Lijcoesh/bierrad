@@ -6,7 +6,7 @@ Wie haalt deze week het bier? Voeg deelnemers toe, kies het aantal bierhalers en
 
 ## Lokaal of live
 
-**Alleen op dit scherm** werkt zelfstandig, zonder backend, account of netwerk. Handmatig ingevoerde deelnemers en de voorkeur voor het aantal bierhalers worden lokaal onthouden. Iedere trekking is onafhankelijk: eerdere winnaars mogen opnieuw winnen.
+**Alleen op dit scherm** werkt zelfstandig, zonder backend, account of netwerk. Een persoonlijk bier- of koffierad begint bij openen of verversen leeg, met de standaardvoorkeur van twee halers en zonder aangepaste winkansen. Eerdere handmatig ingevoerde deelnemers kun je bewust herstellen via de herstelknop; ze worden nooit automatisch geladen. Live-raden laden via hun eigen link de bestaande sessiestand. Iedere trekking is onafhankelijk: eerdere winnaars mogen opnieuw winnen.
 
 **Start live Bierrad** maakt een nieuwe, lege tijdelijke sessie. Je wordt host, voert deelnemers in en deelt **Kopieer kijklink** met collega's of de kantoor-tv. Iedereen ziet dezelfde deelnemers, raderen en uitslag. Kijkers kunnen niets aanpassen. De host kan deelnemers beheren, aantal kiezen, draaien, resetten en de sessie beëindigen. Live deelnemers worden niet naar browseropslag gekopieerd. De knop verschijnt alleen als een geldige publieke API-URL is geconfigureerd.
 
@@ -172,6 +172,6 @@ SessionController → Draw Engine → DrawInstruction → Wheel Renderers
 
 ## Koffierad ☕
 
-Naast Bierrad is er **Koffierad: wie haalt de volgende koffie?** Kies bovenaan je variant of open de site met `#/coffee` (bier: `#/beer`; de bestaande lege route blijft Bierrad). Beide gebruiken dezelfde radlogica. Koffie heeft warme crème-/espressokleuren en eigen teksten, deelnemersopslag en aantalvoorkeur. Wisselen start een lokale variant; tijdens draaien is de wissel geblokkeerd. Er is geen permanente uitslaghistorie.
+Naast Bierrad is er **Koffierad: wie haalt de volgende koffie?** Kies bovenaan je variant of open de site met `#/coffee` (bier: `#/beer`; de bestaande lege route blijft Bierrad). Beide gebruiken dezelfde radlogica. Koffie heeft warme crème-/espressokleuren en eigen teksten en een apart opgeslagen deelnemerslijst voor handmatig herstel. Beide varianten starten leeg met de standaard aantalvoorkeur. Wisselen start een lokale variant; tijdens draaien is de wissel geblokkeerd. Er is geen permanente uitslaghistorie.
 
 De variant van een live-sessie staat vanaf creatie vast op de server; host en kijkers ontvangen hetzelfde thema. Oude sessies en links blijven bier. `POST /api/sessions` en `POST /api/slack-sessions` accepteren `{}` voor bier of een body met uitsluitend `variant`, met waarde `beer` of `coffee`. Koffie krijgt een **eigen Slack-app** met eigen servercredentials, privé-startlink, `:coffee:`-reacties en koffie-uitslagen. Zie [Koffierad instellen](docs/slack-setup.md#aparte-koffierad-app). De implementatie gebruikt privé-startlinks, geen slashcommando's of automatische kanaalposts.
