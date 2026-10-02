@@ -200,6 +200,9 @@ test("invalid access clears state, fragment routes separate host and viewer acce
   );
   assert.equal(parseLiveRoute(`#/live/${words}-extra`), null);
   assert.equal(parseLiveRoute(`#/live/Bier-${words.slice(5)}`), null);
+  const short = "kaas-molen-tulp-fiets-zon";
+  assert.equal(parseLiveRoute(`#/live/${short}`)?.capability, short);
+  assert.equal(parseLiveRoute(`#/live/${short}-dijk`), null);
 });
 
 test("offline client clears participant data at its server-adjusted expiration", async () => {

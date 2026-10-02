@@ -6,8 +6,8 @@ export function parseLiveRoute(
   capability: string;
   spectatorCapability?: string;
 } | null {
-  // Hex `locator.secret`, or (new spectator links) 13 chained words.
-  const cap = String.raw`[a-f0-9]{32}\.[a-f0-9]{64}|[a-z]{2,8}(?:-[a-z]{2,8}){12}`;
+  // Hex `locator.secret`, or 5 chained words (13 for older spectator links).
+  const cap = String.raw`[a-f0-9]{32}\.[a-f0-9]{64}|[a-z]{2,8}(?:-[a-z]{2,8}){12}|[a-z]{2,8}(?:-[a-z]{2,8}){4}`;
   const match = new RegExp(`^#/(host|live)/(${cap})(?:/(${cap}))?$`).exec(
     hash,
   );

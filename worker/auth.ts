@@ -6,9 +6,14 @@ export function randomHex(bytes = 32): string {
     b.toString(16).padStart(2, "0"),
   ).join("");
 }
-const WORD_COUNT = 13;
+const WORD_COUNT = 5;
+/** Links issued before the switch to 5 words stay valid until they expire. */
+const LEGACY_WORD_COUNT = 13;
 const WORD_INDEX = new Map(SPECTATOR_WORDS.map((word, i) => [word, i]));
-/** 13 words from a 1024-word list: 130 secret bits that are easy to type. */
+/**
+ * 5 words from a 1024-word list: 50 secret bits that are easy to type. Below
+ * the 128-bit floor by explicit owner decision; spectators can only view.
+ */
 export function randomWords(count = WORD_COUNT): string {
   // 1024 = 2^10, so masking a uniform 16-bit value is unbiased.
   return Array.from(
@@ -32,7 +37,8 @@ export function parseCapability(
     return { locator, secret };
   }
   const words = value.split("-");
-  return words.length === WORD_COUNT && words.every((w) => WORD_INDEX.has(w))
+  return (words.length === WORD_COUNT || words.length === LEGACY_WORD_COUNT) &&
+    words.every((w) => WORD_INDEX.has(w))
     ? { locator: null, secret: value }
     : null;
 }
