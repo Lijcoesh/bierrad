@@ -22,10 +22,13 @@ export function SessionRoot() {
     window.addEventListener("hashchange", change);
     return () => window.removeEventListener("hashchange", change);
   }, []);
-  const invite = /^#\/(coffee-)?slack-start\/([a-f0-9]{64})$/.exec(hash);
-  return invite ? (
-    <VariantContext.Provider value={invite[1] ? "coffee" : "beer"}>
-      <SlackStart key={hash} capability={invite[2]} />
+  const login =
+    /^#\/(coffee-)?slack(?:\/(denied|forbidden|expired|unavailable|busy))?$/.exec(
+      hash,
+    );
+  return login ? (
+    <VariantContext.Provider value={login[1] ? "coffee" : "beer"}>
+      <SlackLogin key={hash} failure={login[2] as SlackFailure | undefined} />
     </VariantContext.Provider>
   ) : (
     <SessionPage key={hash} hash={hash} />
@@ -129,7 +132,7 @@ function LiveBar({
     setPending(true);
     setNotice("");
     try {
-      const created = await createLiveSession(apiUrl, undefined, theme.variant);
+      const created = await createLiveSession(apiUrl, theme.variant);
       // Fragment survives reload, but is never sent to Pages or stored in web storage.
       location.hash = `/host/${created.hostCapability}/${created.spectatorCapability}`;
     } catch (error) {
@@ -170,6 +173,15 @@ function LiveBar({
         >
           Start live {theme.name} ↗
         </button>
+      )}
+      {!live && apiUrl && (
+        <a
+          className="button-link"
+          href={slackLoginUrl(apiUrl, theme.variant)}
+          rel="noreferrer"
+        >
+          Start met Slack {theme.icon}
+        </a>
       )}
       {live?.role === "host" &&
         live.status !== "unavailable" &&
@@ -217,14 +229,25 @@ function LiveBar({
   );
 }
 
-function SlackStart({ capability }: { capability: string }) {
+type SlackFailure = "denied" | "forbidden" | "expired" | "unavailable" | "busy";
+const failures: Record<SlackFailure, string> = {
+  denied: "Inloggen bij Slack is geannuleerd.",
+  forbidden:
+    "Alleen volwaardige leden van de workspace kunnen een Slack-rad starten. Gasten en externe gebruikers kunnen wel meekijken.",
+  expired:
+    "Het inloggen duurde te lang of is in een ander tabblad gestart. Probeer opnieuw.",
+  unavailable: "Slack is nu niet bereikbaar of nog niet ingesteld.",
+  busy: "Even rustig aan. Probeer over een minuut opnieuw.",
+};
+function slackLoginUrl(api: string, variant: WheelVariant): string {
+  return `${api}/auth/slack/${variant}`;
+}
+function SlackLogin({ failure }: { failure?: SlackFailure }) {
   const theme = useTheme();
   useEffect(() => {
     document.documentElement.dataset.variant = theme.variant;
     document.title = theme.name;
   }, [theme.variant, theme.name]);
-  const [pending, setPending] = useState(false),
-    [error, setError] = useState("");
   const api = configuredApiUrl();
   return (
     <div className="unavailable">
@@ -232,34 +255,19 @@ function SlackStart({ capability }: { capability: string }) {
         {theme.icon} {theme.badge}.
       </h1>
       <p>
-        Start een tijdelijk live {theme.name} met Slack. Bewaar deze startlink
-        voor organisatoren; deel straks alleen de kijklink.
+        Log in met Slack om een tijdelijk live {theme.name} te starten. Deel
+        daarna alleen de kijklink.
       </p>
-      <button
-        className="primary"
-        disabled={pending || !api}
-        onClick={() => {
-          setPending(true);
-          setError("");
-          void createLiveSession(api!, capability, theme.variant)
-            .then((created) => {
-              location.replace(
-                `${location.pathname}#/host/${created.hostCapability}/${created.spectatorCapability}`,
-              );
-            })
-            .catch(() => {
-              setError(
-                "Deze startlink is verlopen, ingetrokken of Slack is nog niet ingesteld.",
-              );
-              setPending(false);
-            });
-        }}
-      >
-        {pending
-          ? "Klaarzetten…"
-          : `Start ${theme.name} met Slack ${theme.icon}`}
-      </button>
-      {error && <p role="alert">{error}</p>}
+      {failure && <p role="alert">{failures[failure]}</p>}
+      {api && (
+        <a
+          className="primary"
+          href={slackLoginUrl(api, theme.variant)}
+          rel="noreferrer"
+        >
+          Log in met Slack {theme.icon}
+        </a>
+      )}
       <p>
         <a href={localHash(theme.variant)}>Liever handmatig draaien</a>
       </p>

@@ -7,7 +7,7 @@ import {
 import { reconcile, postResult } from "./slack/state";
 import {
   slackAllowed,
-  currentGrant,
+  slackCeiling,
   slackEnvironment,
   type SlackSecrets,
 } from "./slack/access";
@@ -203,11 +203,14 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
         record.slack
       ) {
         if (role !== "host") throw new RequestError(403, "forbidden");
-        const grant = currentGrant(slackEnvironment(this.env, record.variant));
-        if (!grant || !equalHash(grant.hash, record.slack.grantHash))
+        const ceiling = slackCeiling(
+          record.slack,
+          slackEnvironment(this.env, record.variant),
+        );
+        if (ceiling === undefined)
           throw new RequestError(403, "schedule_access_expires");
         // Also resolves the ceiling for existing sessions created before this field existed.
-        record.slack.grantExpiresAt = grant.expiresAt;
+        record.slack.grantExpiresAt = ceiling;
       }
       if (command !== null) {
         mutate(record, role, command, Date.now());
