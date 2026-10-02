@@ -7,6 +7,7 @@ import {
 import { reconcile, postResult } from "./slack/state";
 import {
   slackAllowed,
+  currentGrant,
   slackEnvironment,
   type SlackSecrets,
 } from "./slack/access";
@@ -64,7 +65,11 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
     );
     const record = newSession(hostHash, spectatorHash, Date.now(), variant);
     if (grant) {
-      record.slack = { grantHash: grant.hash, mapping: {} };
+      record.slack = {
+        grantHash: grant.hash,
+        grantExpiresAt: grant.expiresAt,
+        mapping: {},
+      };
       record.expiresAt = Math.min(record.expiresAt, grant.expiresAt);
     }
     this.save(record);
@@ -188,6 +193,22 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
         )
       )
         throw new RequestError(403, "forbidden");
+      if (
+        command &&
+        typeof command === "object" &&
+        "type" in command &&
+        command.type === "setScheduledDraw" &&
+        "startAt" in command &&
+        command.startAt !== null &&
+        record.slack
+      ) {
+        if (role !== "host") throw new RequestError(403, "forbidden");
+        const grant = currentGrant(slackEnvironment(this.env, record.variant));
+        if (!grant || !equalHash(grant.hash, record.slack.grantHash))
+          throw new RequestError(403, "schedule_access_expires");
+        // Also resolves the ceiling for existing sessions created before this field existed.
+        record.slack.grantExpiresAt = grant.expiresAt;
+      }
       if (command !== null) {
         mutate(record, role, command, Date.now());
         this.save(record);

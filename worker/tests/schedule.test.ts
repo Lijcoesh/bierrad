@@ -31,7 +31,7 @@ test("schedule is host-only, strictly validated, temporary and cancellable", () 
     1,
     "bad",
     new Date(now).toISOString(),
-    new Date(r.expiresAt - 5000).toISOString(),
+    new Date(now + 31 * 24 * 60 * 60 * 1000).toISOString(),
   ])
     assert.throws(() => mutate(r, "host", command(at), now));
   const at = new Date(now + 60000).toISOString();
@@ -111,4 +111,70 @@ test("failed refresh, no participants, expiry and manual actions never trigger a
     mutate(r, "host", { type, revision: r.revision }, now);
     assert.equal(r.scheduledDraw, undefined);
   }
+});
+
+test("24-hour sessions extend to a scheduled start plus an hour without reviving expired sessions", () => {
+  const r = setup();
+  const hour = 60 * 60 * 1000;
+  assert.equal(r.expiresAt - r.createdAt, 24 * hour);
+  const schedule = (at: number) =>
+    mutate(
+      r,
+      "host",
+      {
+        type: "setScheduledDraw",
+        startAt: new Date(at).toISOString(),
+        revision: r.revision,
+      },
+      now,
+    );
+  schedule(now + 2 * hour);
+  assert.equal(r.expiresAt, now + 24 * hour);
+  schedule(now + 48 * hour);
+  assert.equal(r.expiresAt, now + 49 * hour);
+  assert.equal(
+    publicSession(r).expiresAt,
+    new Date(now + 49 * hour).toISOString(),
+  );
+  schedule(now + 3 * hour);
+  assert.equal(r.expiresAt, now + 49 * hour);
+  mutate(
+    r,
+    "host",
+    { type: "setScheduledDraw", startAt: null, revision: r.revision },
+    now,
+  );
+  assert.equal(nextDeadline(r), now + 49 * hour);
+  r.expiresAt = now;
+  assert.throws(() => schedule(now + hour));
+  assert.equal(r.expiresAt, now);
+});
+
+test("Slack planning requires grant validity through the extra hour and rejects atomically", () => {
+  const r = setup(),
+    hour = 3600000;
+  r.slack = {
+    grantHash: "synthetic",
+    grantExpiresAt: now + 72 * hour,
+    mapping: {},
+  };
+  const schedule = (at: number) =>
+    mutate(
+      r,
+      "host",
+      {
+        type: "setScheduledDraw",
+        startAt: new Date(at).toISOString(),
+        revision: r.revision,
+      },
+      now,
+    );
+  schedule(now + 71 * hour);
+  assert.equal(r.expiresAt, r.slack.grantExpiresAt);
+  const before = structuredClone(r);
+  assert.throws(() => schedule(now + 71 * hour + 1));
+  assert.deepEqual(r, before);
+  assert.ok(!JSON.stringify(publicSession(r)).includes("grantExpiresAt"));
+  delete r.slack.grantExpiresAt;
+  assert.throws(() => schedule(now + 73 * hour));
 });

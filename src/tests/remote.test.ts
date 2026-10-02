@@ -227,3 +227,43 @@ test("offline client clears participant data at its server-adjusted expiration",
     controller.dispose();
   }
 });
+
+test("extended session expiry avoids browser timer overflow and still expires offline", async (t) => {
+  const now = Date.now(),
+    duration = 30 * 24 * 3600000 + 3600000;
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now });
+  const dto = {
+    ...fixture(now),
+    expiresAt: new Date(now + duration).toISOString(),
+  };
+  const socket = new FakeSocket();
+  const controller = new RemoteSessionController({
+    apiUrl: "https://example.invalid",
+    role: "host",
+    capability,
+    fetch: (async () =>
+      Response.json({
+        type: "snapshot",
+        role: "host",
+        session: dto,
+        serverNow: now,
+      })) as typeof fetch,
+    socket: () => socket as unknown as WebSocket,
+  });
+  try {
+    await controller.initialize();
+    socket.deliver({
+      type: "snapshot",
+      role: "host",
+      session: dto,
+      serverNow: now,
+    });
+    t.mock.timers.tick(2147483647);
+    assert.equal(controller.getSnapshot().capabilities.canViewSession, true);
+    t.mock.timers.tick(duration - 2147483647 + 1);
+    assert.equal(controller.getSnapshot().live?.status, "unavailable");
+    assert.equal(controller.getSnapshot().session.participants.length, 0);
+  } finally {
+    controller.dispose();
+  }
+});

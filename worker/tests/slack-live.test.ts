@@ -35,6 +35,7 @@ for (const variant of ["beer", "coffee"] as const)
                 `\nexport class TestSession extends LiveSession {
       edit(fn) { const r = JSON.parse(this.ctx.storage.sql.exec('SELECT value FROM session WHERE singleton = 1').one().value); fn(r); this.ctx.storage.sql.exec('UPDATE session SET value = ? WHERE singleton = 1', JSON.stringify(r)); }
       runCompletion() { return this.alarm(); }
+      legacyExpiry() { this.edit(r => { r.expiresAt = Date.now() + 30000; delete r.slack.grantExpiresAt; }); }
       revokeGrant() { this.edit(r => { r.slack.grantHash = "revoked-synthetic"; }); }
       unlockImport() { this.edit(r => { r.slack.nextImportAt = 0; r.slack.nextFinalImportAt = 0; r.slack.retryImportAt = 0; }); }
       unlockRetry() { this.edit(r => { r.slack.job.retryAt = 0; }); }
@@ -56,7 +57,7 @@ for (const variant of ["beer", "coffee"] as const)
                   ? "SLACK_START_GRANT"
                   : "COFFEE_SLACK_START_GRANT"]: JSON.stringify({
                   hash: await hashSecret(randomHex()),
-                  expiresAt: Date.now() + 600000,
+                  expiresAt: Date.now() + 3 * 24 * 3600000,
                 }),
                 [variant === "coffee"
                   ? "COFFEE_SLACK_BOT_TOKEN"
@@ -65,7 +66,7 @@ for (const variant of ["beer", "coffee"] as const)
                   ? "COFFEE_SLACK_START_GRANT"
                   : "SLACK_START_GRANT"]: JSON.stringify({
                   hash,
-                  expiresAt: Date.now() + 600000,
+                  expiresAt: Date.now() + 3 * 24 * 3600000,
                 }),
               },
               ratelimits: {
@@ -227,6 +228,7 @@ for (const variant of ["beer", "coffee"] as const)
         ) as unknown as {
           runCompletion(): Promise<void>;
           revokeGrant(): Promise<void>;
+          legacyExpiry(): Promise<void>;
           unlockImport(): Promise<void>;
           unlockRetry(): Promise<void>;
           crashRecovery(): Promise<void>;
@@ -345,6 +347,41 @@ for (const variant of ["beer", "coffee"] as const)
           state.participants.find((p) => p.name === "Alice")!.id,
           stableId,
         );
+        // Existing unexpired sessions can extend past their old expiry after grant revalidation.
+        await stub.legacyExpiry();
+        const later = Date.now() + 2 * 24 * 3600000;
+        assert.equal(
+          (
+            await command({
+              type: "setScheduledDraw",
+              startAt: new Date(later).toISOString(),
+            })
+          ).status,
+          200,
+        );
+        state = await snapshot(host);
+        assert.equal(Date.parse(state.expiresAt), later + 3600000);
+        assert.equal(
+          Date.parse((await snapshot(viewer)).expiresAt),
+          later + 3600000,
+        );
+        assert.equal(
+          (
+            await command({
+              type: "setScheduledDraw",
+              startAt: new Date(Date.now() + 4 * 24 * 3600000).toISOString(),
+            })
+          ).status,
+          400,
+        );
+        assert.equal(
+          Date.parse((await snapshot(host)).expiresAt),
+          later + 3600000,
+        );
+        assert.equal(
+          (await command({ type: "setScheduledDraw", startAt: null })).status,
+          200,
+        );
         const readsBeforeStart = readCalls;
         const start = await command({
           type: "setScheduledDraw",
@@ -438,7 +475,6 @@ for (const variant of ["beer", "coffee"] as const)
         assert.equal(posts, 3);
         await stub.runCompletion();
         assert.equal(posts, 3);
-        await stub.revokeGrant();
         const readsBeforeRevocation = readCalls;
         assert.equal(
           (
@@ -449,6 +485,7 @@ for (const variant of ["beer", "coffee"] as const)
           ).status,
           200,
         );
+        await stub.revokeGrant();
         await new Promise((resolve) => setTimeout(resolve, 4000));
         state = await snapshot(host);
         assert.equal(state.scheduledDraw?.status, "skipped");

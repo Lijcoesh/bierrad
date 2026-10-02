@@ -95,3 +95,24 @@ test("auto refresh runs every five minutes, pauses safely, avoids overlap and cl
   assert.equal(calls, 2);
   assert.equal(errors, 0);
 });
+
+test("schedule button stays available when the selected start is after the old session expiry", async (t) => {
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { ScheduleControls } = await import("../components/ScheduleControls");
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: Date.parse("2026-10-02T10:00:00Z"),
+  });
+  const html = renderToStaticMarkup(
+    createElement(ScheduleControls, {
+      expiresAt: "2026-10-02T12:27:00Z",
+      locked: false,
+      async onSave() {},
+    }),
+  );
+  assert.match(html, /2026-10-02T15:45/);
+  assert.match(html, /verlengen we deze sessie/);
+  assert.match(html, /16:45/);
+  assert.doesNotMatch(html, /<button[^>]*disabled/);
+});

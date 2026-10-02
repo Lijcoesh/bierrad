@@ -18,6 +18,7 @@ export interface SlackJob {
 }
 export interface SlackState {
   grantHash: string;
+  grantExpiresAt?: number;
   source?: SlackSource;
   mapping: Record<string, string>;
   syncedAt?: string;

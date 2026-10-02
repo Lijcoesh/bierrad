@@ -158,16 +158,25 @@ export class RemoteSessionController implements SessionController {
       winnerIds: dto.winnerIds,
       activeDraw: dto.activeDraw?.id === oldDraw?.id ? oldDraw : dto.activeDraw,
     });
+    this.armExpiry();
+    if (this.terminal) return;
+    this.publish(
+      this.ws?.readyState === 1 ? "connected" : "connecting",
+      session,
+    );
+  }
+  private armExpiry() {
     clearTimeout(this.expiry);
-    const remaining = Date.parse(dto.expiresAt) - (Date.now() + this.offset);
+    if (this.disposed || this.terminal || !this.expiresAt) return;
+    const remaining = Date.parse(this.expiresAt) - (Date.now() + this.offset);
     if (remaining <= 0) {
       this.unavailable();
       return;
     }
-    this.expiry = setTimeout(() => this.unavailable(), remaining);
-    this.publish(
-      this.ws?.readyState === 1 ? "connected" : "connecting",
-      session,
+    // Browser timers overflow above ~24.8 days; recheck long plans in bounded chunks.
+    this.expiry = setTimeout(
+      () => this.armExpiry(),
+      Math.min(remaining, 2147483647),
     );
   }
   private unavailable() {
@@ -214,7 +223,9 @@ export class RemoteSessionController implements SessionController {
       };
       const slackMessages: Record<string, string> = {
         invalid_schedule:
-          "Kies een toekomstig tijdstip dat binnen deze live-sessie past.",
+          "Kies een toekomstig tijdstip binnen de komende 30 dagen.",
+        schedule_access_expires:
+          "De Slack-toegang is niet lang genoeg geldig voor deze planning plus één uur. Gebruik een nieuwe privé-startlink met langere geldigheid.",
         slack_link:
           "Plak een volledige Slack-berichtlink. Een threadlink verwijst naar het hoofdbericht.",
         slack_incomplete:

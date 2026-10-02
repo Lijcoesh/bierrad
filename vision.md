@@ -485,7 +485,7 @@ Collega's kunnen op meerdere browsers en de kantoor-tv naar dezelfde live trekki
 
 ## Host en toeschouwers
 
-Een host beheert handmatig de deelnemers, kiest het aantal bierhalers, start alle raderen tegelijk en kan de trekking resetten. Via een privé-startlink kan een bevoegde organisator Slack-reactors laden en de uitslag automatisch in de oorspronkelijke thread laten plaatsen. Toeschouwers kijken alleen mee. Host en kijkers hebben verschillende tijdelijke links via URL-fragmenten; zonder geldige toegang zijn deelnemers niet zichtbaar. De sessie verloopt na acht uur of wanneer de host haar beëindigt. De kantoor-tv is een toeschouwer en hoeft geen bediening te tonen.
+Een host beheert handmatig de deelnemers, kiest het aantal bierhalers, start alle raderen tegelijk en kan de trekking resetten. Via een privé-startlink kan een bevoegde organisator Slack-reactors laden en de uitslag automatisch in de oorspronkelijke thread laten plaatsen. Toeschouwers kijken alleen mee. Host en kijkers hebben verschillende tijdelijke links via URL-fragmenten; zonder geldige toegang zijn deelnemers niet zichtbaar. Nieuwe sessies verlopen standaard na 24 uur of wanneer de host ze beëindigt. Een geplande start verlengt een nog geldige sessie zo nodig tot één uur na de start, binnen de geldigheid van Slack-toegang. De kantoor-tv is een toeschouwer en hoeft geen bediening te tonen.
 
 ## Hetzelfde rad, één autoriteit
 
@@ -495,7 +495,7 @@ Een Cloudflare Worker met een Durable Object per sessie beheert livegegevens en 
 
 ## Geplande vrijdagtrekkingen
 
-Naast hostbediening kan een automatische trekking voor de huidige live-sessie worden ingesteld, standaard vrijdag om 15:45 Nederlandse tijd. De start moet binnen de tijdelijke sessieduur vallen. Vlak voor de trekking worden Slack-reacties opnieuw gecontroleerd; bij een mislukte controle wordt de start overgeslagen. De deelnemers zijn vooraf geladen, alle schermen tonen een countdown, alle raderen starten automatisch op de gedeelde starttijd en onthullen hun winnaars kort na elkaar. Tot slot verschijnen alle namen en kan de uitslag in de oorspronkelijke Slack-thread worden geplaatst.
+Naast hostbediening kan een automatische trekking voor de huidige live-sessie worden ingesteld, standaard vrijdag om 15:45 Nederlandse tijd. De start mag maximaal 30 dagen vooruit liggen en verlengt de nog geldige sessie zo nodig tot één uur erna. Vlak voor de trekking worden Slack-reacties opnieuw gecontroleerd; bij een mislukte controle wordt de start overgeslagen. De deelnemers zijn vooraf geladen, alle schermen tonen een countdown, alle raderen starten automatisch op de gedeelde starttijd en onthullen hun winnaars kort na elkaar. Tot slot verschijnen alle namen en kan de uitslag in de oorspronkelijke Slack-thread worden geplaatst.
 
 Slack blijft de ingang voor deelname via `:beers:` en voor de uitslag. Slack-credentials blijven uitsluitend op de backend. Handmatige lokale deelname blijft altijd mogelijk.
 

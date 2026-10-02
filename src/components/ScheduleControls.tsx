@@ -1,3 +1,7 @@
+import {
+  MAX_SCHEDULE_AHEAD_MS,
+  SCHEDULE_RETENTION_MS,
+} from "../../shared/retention";
 import { useState } from "react";
 import type { ScheduledDraw } from "../../shared/protocol";
 import {
@@ -30,7 +34,9 @@ export function ScheduleControls({
   const valid =
     Number.isFinite(at) &&
     at > Date.now() + clockOffsetMs + 2000 &&
-    at + 7250 < Date.parse(expiresAt);
+    at <= Date.now() + clockOffsetMs + MAX_SCHEDULE_AHEAD_MS;
+  const extendsSession =
+    valid && at + SCHEDULE_RETENTION_MS > Date.parse(expiresAt);
   const save = async (startAt: string | null) => {
     setBusy(true);
     setError("");
@@ -72,13 +78,24 @@ export function ScheduleControls({
             id="scheduled-start"
             type="datetime-local"
             value={value}
-            max={amsterdamInput(Date.parse(expiresAt) - 8000)}
+            max={amsterdamInput(
+              Date.now() + clockOffsetMs + MAX_SCHEDULE_AHEAD_MS,
+            )}
             disabled={locked || busy}
             onChange={(event) => setValue(event.target.value)}
           />
           {!valid && (
             <p className="storage-note">
-              Kies een toekomstig tijdstip vóór het verlopen van deze sessie.
+              Kies een toekomstig tijdstip binnen de komende 30 dagen.
+            </p>
+          )}
+          {extendsSession && (
+            <p className="storage-note">
+              Bij aanzetten verlengen we deze sessie tot{" "}
+              {formatScheduledTime(
+                new Date(at + SCHEDULE_RETENTION_MS).toISOString(),
+              )}
+              : één uur na de start.
             </p>
           )}
           <button
@@ -92,9 +109,10 @@ export function ScheduleControls({
       <p className="storage-note">
         Eenmalig voor dit live rad, ook als je dit scherm sluit. Een gekoppeld
         Slack-bericht wordt vlak voor de start nog gecontroleerd; daardoor kan
-        het rad iets later starten. De sessie verloopt{" "}
-        {formatScheduledTime(expiresAt)}. Handmatig draaien of resetten
-        annuleert de planning.
+        het rad iets later starten. Nieuwe sessies blijven standaard 24 uur
+        actief; een latere planning verlengt dat tot één uur na de start. Deze
+        sessie verloopt nu {formatScheduledTime(expiresAt)}. Handmatig draaien
+        of resetten annuleert de planning.
       </p>
       {error && (
         <p className="error" role="alert">

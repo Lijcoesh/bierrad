@@ -10,7 +10,12 @@ import { validateParticipants } from "../src/utils/participants";
 import type { BeerWheelSession, ClientRole } from "../src/domain/models";
 import type { ScheduledDraw, PublicBeerWheelSession } from "../shared/protocol";
 
-export const TTL_MS = 8 * 60 * 60 * 1000;
+import {
+  DEFAULT_SESSION_TTL_MS,
+  SCHEDULE_RETENTION_MS,
+  MAX_SCHEDULE_AHEAD_MS,
+} from "../shared/retention";
+export const TTL_MS = DEFAULT_SESSION_TTL_MS;
 export const START_DELAY_MS = 2000;
 export class RequestError extends Error {
   constructor(
@@ -284,9 +289,16 @@ export function mutate(
         !Number.isFinite(at) ||
         new Date(at).toISOString() !== command.startAt ||
         at < now + START_DELAY_MS ||
-        at + 7250 >= record.expiresAt
+        at > now + MAX_SCHEDULE_AHEAD_MS
       )
         throw new RequestError(400, "invalid_schedule");
+      const extendedExpiry = at + SCHEDULE_RETENTION_MS;
+      if (
+        record.slack &&
+        extendedExpiry > (record.slack.grantExpiresAt ?? record.expiresAt)
+      )
+        throw new RequestError(400, "schedule_access_expires");
+      record.expiresAt = Math.max(record.expiresAt, extendedExpiry);
       record.scheduledDraw = {
         startAt: command.startAt as string,
         status: "pending",
