@@ -20,7 +20,19 @@ export interface SlackHostStatus {
     status: "pending" | "posting" | "posted" | "failed" | "uncertain";
     retryAt?: number;
   };
+  /** Spectator-link reminder in the Slack thread before a scheduled draw. */
+  reminder?: {
+    startAt: string;
+    status: SlackReminderStatus;
+  };
 }
+export type SlackReminderStatus =
+  | "pending"
+  | "posting"
+  | "posted"
+  | "failed"
+  | "uncertain"
+  | "skipped";
 /** Explicit DTO; never serialize backend storage directly. */
 export interface PublicBeerWheelSession {
   variant?: WheelVariant;
@@ -38,7 +50,12 @@ export type HostCommand =
   | { type: "setParticipants"; names: string[] }
   | { type: "setWinnerCount"; count: number }
   | { type: "startDraw" }
-  | { type: "setScheduledDraw"; startAt: string | null }
+  | {
+      type: "setScheduledDraw";
+      startAt: string | null;
+      /** Opt-in: the host's own spectator link, posted to the Slack thread. */
+      spectatorCapability?: string;
+    }
   | { type: "reset" }
   | { type: "endSession" }
   | { type: "slackImport"; permalink?: string }

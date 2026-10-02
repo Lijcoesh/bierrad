@@ -114,3 +114,15 @@ Explicitly requested by the user, reviewed against every SECURITY.md section; SE
 - **Legacy:** `/api/slack-sessions`, the frontend start-link route and the provisioning script are removed. Existing start-link sessions keep validating their grant until it expires, so a scheduled draw started on 2026-10-02 still runs; delete `SLACK_START_GRANT` afterwards.
 
 Tests (synthetic data only) cover cookie attributes and parsing, forged, missing, duplicate and cancelled states, rejected codes, each claim, workspace mismatch, guests, strangers, deleted users, bots and apps, user-token revocation, secrets kept out of URLs, the closed legacy endpoint, legacy grant validation, the fixed login ceiling and the full Worker flow for both variants through Miniflare.
+
+## Spectator-link reminder before scheduled draws
+
+The user explicitly requested on 2026-10-02 that a scheduled draw posts the spectator link to the Slack thread two minutes ahead. Reviewed against every SECURITY.md section; SECURITY.md now records this exception.
+
+- **Authorization:** only a host mutation can opt in, only in a Slack-linked session with working Slack access. The Worker rejects links whose locator differs from the host's session (400); the Durable Object hashes the offered secret before reading state and only accepts an exact match with the stored spectator hash (403 otherwise). A host link, another session's link, malformed values and free text are refused, so the bot cannot be made to post arbitrary content or URLs.
+- **Output:** fixed Dutch text, the start time in Europe/Amsterdam and one rich-text link built from the validated `FRONTEND_URL` (must be an allowed origin, no query/fragment/credentials). The capability stays in the fragment. `unfurl_links`/`unfurl_media` false, `reply_broadcast` false, `link_names` false, no mentions or participant names.
+- **Exposure:** everyone who can read the thread, including Slack Connect members, gains view access until session expiry (at most start plus one hour). They already see the reactor list there; the host UI states the consequence and the option can be unchecked.
+- **Storage:** the raw spectator capability is stored only inside the pending reminder and deleted when it is posted, uncertain, skipped, finally failed, replaced, cancelled, on draw, reset, manual mode and expiry. It is excluded from host and spectator DTOs; the host status shows only start time and state.
+- **Delivery:** claimed and synced before I/O with a two-minute crash lease, rechecks Slack access after the claim, never repeats uncertain posts, one automatic retry after a definite rejection only before the start, and at most five reminder posts per session to bound spam from rescheduling. No new scopes, secrets, bindings, dependencies or logging.
+
+Tests (synthetic data only) cover opt-in, hash/locator/format refusal, missing Slack source, lead time and immediate posting, the 30-second floor, link wiping on every exit path, DTO and storage absence after settling, single delivery under concurrent alarms, message shape for both variants, and rejection followed by cancellation through the real Worker.

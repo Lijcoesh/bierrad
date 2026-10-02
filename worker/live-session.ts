@@ -4,7 +4,13 @@ import {
   SlackReactionParticipantSource,
   parseSlackPermalink,
 } from "./slack/source";
-import { reconcile, postResult } from "./slack/state";
+import {
+  reconcile,
+  postResult,
+  postReminder,
+  reminderBody,
+  MAX_REMINDER_POSTS,
+} from "./slack/state";
 import {
   slackAllowed,
   slackCeiling,
@@ -25,7 +31,7 @@ import {
   RequestError,
   type StoredSession,
 } from "./session";
-import { json } from "./http";
+import { frontend, json } from "./http";
 import type { ClientRole } from "../src/domain/models";
 import type { ServerToClientMessage } from "../shared/protocol";
 
@@ -122,6 +128,14 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
                       },
                     }
                   : {}),
+                ...(record.slack.reminder
+                  ? {
+                      reminder: {
+                        startAt: record.slack.reminder.startAt,
+                        status: record.slack.reminder.status,
+                      },
+                    }
+                  : {}),
               },
             }
           : {}),
@@ -164,6 +178,17 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
   }
   async access(secret: string, command: unknown): Promise<Response> {
     try {
+      // Hash an offered spectator link up front, so no await separates the
+      // read below from the comparison and mutation.
+      const offered =
+        command &&
+        typeof command === "object" &&
+        "spectatorCapability" in command &&
+        typeof command.spectatorCapability === "string"
+          ? command.spectatorCapability
+          : undefined;
+      const parsed = parseCapability(offered ?? null);
+      const offeredHash = parsed ? await hashSecret(parsed.secret) : undefined;
       const role = await this.authenticate(secret);
       // Re-read after the await, protecting concurrent requests/expiry.
       const record = this.read();
@@ -213,7 +238,15 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
         record.slack.grantExpiresAt = ceiling;
       }
       if (command !== null) {
-        mutate(record, role, command, Date.now());
+        mutate(
+          record,
+          role,
+          command,
+          Date.now(),
+          offeredHash && equalHash(offeredHash, record.spectatorHash)
+            ? offered
+            : undefined,
+        );
         this.save(record);
       }
       if (Date.now() >= record.expiresAt) {
@@ -364,11 +397,115 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
       this.save(record);
       this.broadcast(record);
     }
+    await this.processSlackReminder();
     await this.processScheduledDraw();
     await this.processSlackResult();
     const latest = this.read();
     if (latest && Date.now() < latest.expiresAt)
       await this.ctx.storage.setAlarm(nextDeadline(latest));
+  }
+  /** Same claim-before-I/O discipline as results; ambiguous posts never repeat. */
+  private async processSlackReminder() {
+    const record = this.read();
+    const reminder = record?.slack?.reminder;
+    if (!record || Date.now() >= record.expiresAt || !reminder) return;
+    const settle = (target: StoredSession, status = reminder.status) => {
+      const r = target.slack!.reminder!;
+      r.status = status;
+      delete r.capability;
+      delete r.retryAt;
+      target.revision++;
+      this.save(target);
+      this.broadcast(target);
+    };
+    if (reminder.status === "posting") {
+      if (Date.now() >= reminder.attemptedAt! + 120000)
+        settle(record, "uncertain");
+      return;
+    }
+    const due =
+      reminder.status === "pending"
+        ? reminder.readyAt
+        : reminder.status === "failed" && reminder.capability
+          ? (reminder.retryAt ?? Infinity)
+          : Infinity;
+    if (due > Date.now()) return;
+    const slack = record.slack!;
+    const env = slackEnvironment(this.env, record.variant);
+    const app = frontend(this.env);
+    if (
+      Date.now() >= Date.parse(reminder.startAt) ||
+      !slack.source ||
+      !reminder.capability ||
+      !app ||
+      (slack.reminderPosts ?? 0) >= MAX_REMINDER_POSTS ||
+      !slackAllowed(slack.grantHash, env)
+    ) {
+      settle(record, reminder.status === "pending" ? "skipped" : "failed");
+      return;
+    }
+    const body = reminderBody(
+      slack.source,
+      record.variant ?? "beer",
+      `${app.href}#/live/${reminder.capability}`,
+      reminder.startAt,
+      Date.now(),
+    );
+    const id = reminder.id;
+    // Claim synchronously before any await. Persist + arm crash recovery before external I/O.
+    reminder.status = "posting";
+    reminder.attemptedAt = Date.now();
+    reminder.attempts++;
+    slack.reminderPosts = (slack.reminderPosts ?? 0) + 1;
+    record.revision++;
+    this.save(record);
+    this.broadcast(record);
+    await this.ctx.storage.setAlarm(nextDeadline(record));
+    await this.ctx.storage.sync();
+    const current = this.read();
+    if (
+      !current ||
+      Date.now() >= current.expiresAt ||
+      current.slack?.reminder?.id !== id ||
+      current.slack.reminder.status !== "posting"
+    )
+      return;
+    if (
+      !slackAllowed(
+        current.slack.grantHash,
+        slackEnvironment(this.env, current.variant),
+      )
+    ) {
+      settle(current, "failed");
+      return;
+    }
+    const result = await postReminder(
+      new SlackApiClient(env.SLACK_BOT_TOKEN!),
+      body,
+    );
+    const latest = this.read();
+    const r = latest?.slack?.reminder;
+    if (
+      !latest ||
+      Date.now() >= latest.expiresAt ||
+      r?.id !== id ||
+      r.status !== "posting"
+    )
+      return;
+    // A definite rejection gets one automatic retry, but only before the start.
+    if (
+      result.status === "failed" &&
+      r.attempts < 2 &&
+      result.retryAt < Date.parse(r.startAt)
+    ) {
+      r.status = "failed";
+      r.retryAt = result.retryAt;
+      latest.revision++;
+      this.save(latest);
+      this.broadcast(latest);
+      return;
+    }
+    settle(latest, result.status);
   }
   private async processScheduledDraw() {
     let record = this.read();

@@ -980,6 +980,16 @@ footer b {
   min-width: 0;
   box-sizing: border-box;
 }
+.schedule-controls .share-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+.schedule-controls .share-toggle input {
+  width: auto;
+  margin: 0;
+}
 .schedule-controls button {
   padding: 12px;
   border: 1px solid #d9c5af;

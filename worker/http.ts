@@ -56,3 +56,23 @@ export function redirect(location: string, cookie: string): Response {
     },
   });
 }
+/** Validated public frontend base; links are never built from client input. */
+export function frontend(env: {
+  FRONTEND_URL: string;
+  ALLOWED_ORIGINS: string;
+}): URL | undefined {
+  try {
+    const url = new URL(env.FRONTEND_URL);
+    if (
+      url.search ||
+      url.hash ||
+      url.username ||
+      url.password ||
+      !env.ALLOWED_ORIGINS.split(",").includes(url.origin)
+    )
+      return;
+    return url;
+  } catch {
+    return;
+  }
+}

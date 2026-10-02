@@ -22,11 +22,22 @@ import {
   hashSecret,
   wordLocator,
 } from "./auth";
-import { json, readBody, redirect } from "./http";
+import { frontend, json, readBody, redirect } from "./http";
 import { RequestError } from "./session";
 export { LiveSession } from "./live-session";
 
 type WorkerEnv = Env & SlackSecrets;
+/** Whether an offered capability opens the same session as the caller's. */
+async function sameSession(
+  offered: unknown,
+  own: { locator: string | null; secret: string },
+): Promise<boolean> {
+  const parsed = typeof offered === "string" ? parseCapability(offered) : null;
+  return (
+    !!parsed &&
+    (await capabilityLocator(parsed)) === (await capabilityLocator(own))
+  );
+}
 async function createSession(
   env: WorkerEnv,
   variant: WheelVariant,
@@ -56,22 +67,6 @@ async function creationAllowed(env: WorkerEnv, ip: string) {
     (await env.CREATION_LIMIT.limit({ key: ip })).success &&
     (await env.CREATION_GLOBAL.limit({ key: "creation" })).success
   );
-}
-function frontend(env: WorkerEnv): URL | undefined {
-  try {
-    const url = new URL(env.FRONTEND_URL);
-    if (
-      url.search ||
-      url.hash ||
-      url.username ||
-      url.password ||
-      !env.ALLOWED_ORIGINS.split(",").includes(url.origin)
-    )
-      return;
-    return url;
-  } catch {
-    return;
-  }
 }
 /**
  * Top-level browser navigations for Sign in with Slack. These carry no Origin
@@ -212,6 +207,14 @@ export default {
           } else {
             const command =
               url.pathname === "/api/command" ? await readBody(request) : null;
+            // An offered spectator link must open this same session.
+            if (
+              command &&
+              typeof command === "object" &&
+              "spectatorCapability" in command &&
+              !(await sameSession(command.spectatorCapability, capability))
+            )
+              throw new RequestError(400, "invalid");
             response = await stub.access(capability.secret, command);
           }
         } else throw new RequestError(404, "unavailable");

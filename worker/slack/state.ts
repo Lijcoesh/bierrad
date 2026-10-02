@@ -1,5 +1,7 @@
 import { themes } from "../../shared/variant";
 import { createSession } from "../../src/domain/drawEngine";
+import type { WheelVariant } from "../../shared/variant";
+import type { SlackReminderStatus } from "../../shared/protocol";
 import type { StoredSession } from "../session";
 import { RequestError } from "../session";
 import type { SlackPerson, SlackSource } from "./source";
@@ -16,6 +18,26 @@ export interface SlackJob {
   retryAt?: number;
   postedMessageTs?: string;
 }
+/** Posted this long before a scheduled start; shorter plans post right away. */
+export const REMINDER_LEAD_MS = 120000;
+/** No reminder when less than this remains before the start. */
+export const REMINDER_MIN_LEAD_MS = 30000;
+/** Bounds thread messages a host can trigger by rescheduling. */
+export const MAX_REMINDER_POSTS = 5;
+export interface SlackReminder {
+  id: string;
+  startAt: string;
+  readyAt: number;
+  /**
+   * Raw spectator capability, verified against the stored hash. Kept only while
+   * a post is still possible and deleted as soon as the reminder settles.
+   */
+  capability?: string;
+  status: SlackReminderStatus;
+  attempts: number;
+  attemptedAt?: number;
+  retryAt?: number;
+}
 export interface SlackState {
   grantHash: string;
   grantExpiresAt?: number;
@@ -28,6 +50,8 @@ export interface SlackState {
   nextFinalImportAt?: number;
   retryImportAt?: number;
   job?: SlackJob;
+  reminder?: SlackReminder;
+  reminderPosts?: number;
 }
 /** Stable opaque identity; numbered display labels distinguish equal names without Slack IDs. */
 export function reconcile(
@@ -135,17 +159,18 @@ export function resultBody(job: SlackJob) {
     unfurl_media: false,
   };
 }
-export async function postResult(
-  api: SlackApiClient,
-  job: SlackJob,
-): Promise<
+type PostOutcome =
   | { status: "posted"; postedMessageTs: string }
-  | { status: "failed" | "uncertain"; retryAt: number }
-> {
+  | { status: "failed" | "uncertain"; retryAt: number };
+async function post(
+  api: SlackApiClient,
+  channelId: string,
+  body: Record<string, unknown>,
+): Promise<PostOutcome> {
   try {
-    const result = await api.call("chat.postMessage", resultBody(job));
+    const result = await api.call("chat.postMessage", body);
     if (
-      result.channel !== job.source.channelId ||
+      result.channel !== channelId ||
       typeof result.ts !== "string" ||
       !/^\d{10}\.\d{6}$/.test(result.ts)
     )
@@ -161,4 +186,62 @@ export async function postResult(
         Date.now() + (error instanceof SlackError ? error.retryAfterMs : 60000),
     };
   }
+}
+export function postResult(
+  api: SlackApiClient,
+  job: SlackJob,
+): Promise<PostOutcome> {
+  return post(api, job.source.channelId, resultBody(job));
+}
+const clock = new Intl.DateTimeFormat("nl-NL", {
+  timeZone: "Europe/Amsterdam",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+/** Fixed text plus one server-built link; no names, mentions or client text. */
+export function reminderBody(
+  source: SlackSource,
+  variant: WheelVariant,
+  link: string,
+  startAt: string,
+  now: number,
+) {
+  const theme = themes[variant];
+  const minutes = Math.max(1, Math.round((Date.parse(startAt) - now) / 60000));
+  const heading = `⏰ Over ${minutes} ${minutes === 1 ? "minuut" : "minuten"} (${clock.format(Date.parse(startAt))}) draait het ${theme.name}! ${theme.icon}
+Kijk live mee: `;
+  const label = "Open het rad";
+  const escape = (text: string) =>
+    text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return {
+    channel: source.channelId,
+    thread_ts: source.parentMessageTs,
+    text: escape(`${heading}${link}`),
+    blocks: [
+      {
+        type: "rich_text",
+        elements: [
+          {
+            type: "rich_text_section",
+            elements: [
+              { type: "text", text: heading },
+              { type: "link", url: link, text: label },
+            ],
+          },
+        ],
+      },
+    ],
+    mrkdwn: false,
+    parse: "none",
+    link_names: false,
+    reply_broadcast: false,
+    unfurl_links: false,
+    unfurl_media: false,
+  };
+}
+export function postReminder(
+  api: SlackApiClient,
+  body: ReturnType<typeof reminderBody>,
+): Promise<PostOutcome> {
+  return post(api, body.channel, body);
 }
