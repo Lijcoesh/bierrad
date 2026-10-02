@@ -117,7 +117,7 @@ Een capability bestaat uit een willekeurige 128-bit locator plus een onafhankeli
 | `POST /api/command` | Geldige host | Strikt getypeerd commando met actuele revisie |
 | `GET /api/socket` upgrade | Geldige host of kijker | Snapshotupdates; alleen pingberichten toegestaan |
 
-HTTP gebruikt `Authorization: Bearer <capability>`. Browsers bieden bij WebSocket-upgrade `bierrad, auth.<capability>` als subprotocol aan; de server selecteert alleen `bierrad`. Geen capabilities in backend-URLs of querystrings. Commando's: `setParticipants` (namen, server maakt IDs), `setWinnerCount`, `startDraw`, `reset`, `endSession`. De client kan nooit officiële winnaars/instructies aanleveren. Backendrechten zijn bepalend; frontendcapabilities zijn alleen UX.
+HTTP gebruikt `Authorization: Bearer <capability>`. Browsers bieden bij WebSocket-upgrade `bierrad, auth.<capability>` als subprotocol aan; de server selecteert alleen `bierrad`. Geen capabilities in backend-URLs of querystrings. Commando's: `setParticipants` (namen, server maakt IDs), `setWinnerCount`, `setScheduledDraw` (ISO-tijd of null om te annuleren), `startDraw`, `reset`, `endSession`. De client kan nooit officiële winnaars/instructies aanleveren. Backendrechten zijn bepalend; frontendcapabilities zijn alleen UX.
 
 Ongeldige/verlopen toegang retourneert dezelfde generieke unavailable-respons. Afloop wist namen/uitslag uit de UI, ook met een offline deadline. Bestaande sockets sluiten. De host kan de hele sessie onmiddellijk intrekken door haar te beëindigen.
 
@@ -150,8 +150,16 @@ Tijdelijke toegang is niet hetzelfde als gebruikersauthenticatie. Links kunnen i
 
 ## Later
 
-Automatische geplande trekkingen zijn niet geïmplementeerd. Een toekomstige scheduler roept dezelfde server-drawoperatie aan. Er is geen permanente medewerkerhistorie.
+Wekelijks herhalende planning en automatische kanaaloproepen zijn niet geïmplementeerd. Er is geen permanente medewerkerhistorie.
 
+
+## Automatisch verversen en starten
+
+Na Slack-import kun je **Automatisch verversen · elke 5 minuten** aanvinken. Dit werkt zolang dit hostscherm openstaat; sluiten of herladen zet de schakelaar uit. Het pauzeert bij verbroken verbinding, tijdens een import/trekking en vanaf twee minuten voor een geplande start. Handmatige toevoegingen blijven behouden.
+
+Een live-host kan onder **Automatisch starten** een datum en tijd kiezen, standaard de eerstvolgende vrijdag om **15.45 Nederlandse tijd (Europe/Amsterdam)**. Zet de start expliciet aan; uitzetten annuleert de planning. Dit is één trekking binnen de huidige sessie van maximaal acht uur, geen wekelijkse herhaling. Een tijd buiten de sessieduur wordt geweigerd. De planning blijft bij herladen behouden en de server start ook zonder open hostscherm. Handmatig draaien of resetten annuleert de planning.
+
+Vlak vóór de automatische trekking controleert de server de Slack-reacties nogmaals, ook als de vijfminutenrefresh uitstaat. Daarna kiest dezelfde server-drawoperatie de winnaars en publiceert de normale threaduitslag. De laatste controle kan de daadwerkelijke start iets vertragen. Bij ophaalfouten, verlopen Slack-toegang, een lege lijst, een bezette sessie of meer dan een minuut te late alarmbezorging wordt de start overgeslagen; de host kan opnieuw plannen. Er wordt niet stilzwijgend met een oude lijst gedraaid. Bij een crash tijdens de eindcontrole vervalt de poging uiterlijk na twee minuten. Standalone blijft handmatig werken.
 
 ## Slack-deelnemers en threaduitslag
 

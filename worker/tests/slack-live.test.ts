@@ -35,7 +35,8 @@ for (const variant of ["beer", "coffee"] as const)
                 `\nexport class TestSession extends LiveSession {
       edit(fn) { const r = JSON.parse(this.ctx.storage.sql.exec('SELECT value FROM session WHERE singleton = 1').one().value); fn(r); this.ctx.storage.sql.exec('UPDATE session SET value = ? WHERE singleton = 1', JSON.stringify(r)); }
       runCompletion() { return this.alarm(); }
-      unlockImport() { this.edit(r => { r.slack.nextImportAt = 0; }); }
+      revokeGrant() { this.edit(r => { r.slack.grantHash = "revoked-synthetic"; }); }
+      unlockImport() { this.edit(r => { r.slack.nextImportAt = 0; r.slack.nextFinalImportAt = 0; r.slack.retryImportAt = 0; }); }
       unlockRetry() { this.edit(r => { r.slack.job.retryAt = 0; }); }
       crashRecovery() { this.edit(r => { r.slack.job.status = 'posting'; r.slack.job.attemptedAt = Date.now()-121000; }); return this.alarm(); }
       forceExpire() { this.edit(r => { r.expiresAt = Date.now()-1; }); return this.alarm(); }
@@ -91,6 +92,11 @@ for (const variant of ["beer", "coffee"] as const)
                 );
                 if (url.pathname.endsWith("reactions.get")) {
                   readCalls++;
+                  if (mode === "read-reject")
+                    return Response.json({
+                      ok: false,
+                      error: "not_in_channel",
+                    });
                   return Response.json({
                     ok: true,
                     type: "message",
@@ -220,6 +226,7 @@ for (const variant of ["beer", "coffee"] as const)
           namespace.idFromName(host.split(".")[0]),
         ) as unknown as {
           runCompletion(): Promise<void>;
+          revokeGrant(): Promise<void>;
           unlockImport(): Promise<void>;
           unlockRetry(): Promise<void>;
           crashRecovery(): Promise<void>;
@@ -305,6 +312,27 @@ for (const variant of ["beer", "coffee"] as const)
           ).status,
           200,
         );
+        // Submitting the same permalink again must replace, not append.
+        await stub.unlockImport();
+        assert.equal(
+          (
+            await command({
+              type: "slackImport",
+              permalink:
+                "https://synthetic.slack.com/archives/C00000001/p1234567890123456",
+            })
+          ).status,
+          200,
+        );
+        state = await snapshot(host);
+        assert.deepEqual(
+          state.participants.map((p) => p.name),
+          ["Bob", "Alice", "Alice (2)"],
+        );
+        assert.equal(
+          state.participants.find((p) => p.name === "Alice")!.id,
+          stableId,
+        );
         users = ["U00000001"];
         await stub.unlockImport();
         assert.equal((await command({ type: "slackImport" })).status, 200);
@@ -317,15 +345,23 @@ for (const variant of ["beer", "coffee"] as const)
           state.participants.find((p) => p.name === "Alice")!.id,
           stableId,
         );
-        const start = await command({ type: "startDraw" });
+        const readsBeforeStart = readCalls;
+        const start = await command({
+          type: "setScheduledDraw",
+          startAt: new Date(Date.now() + 3000).toISOString(),
+        });
         assert.equal(start.status, 200);
+        // Change reactors after the last import. Only the final server check can see this.
+        users = ["U00000003"];
+        assert.equal(posts, 0);
+        // No browser, socket, polling, or completion callback: only durable alarm runs.
+        await new Promise((resolve) => setTimeout(resolve, 11000));
+        assert.equal(readCalls, readsBeforeStart + 1);
         state = await snapshot(host);
+        assert.equal(state.scheduledDraw, undefined);
         const official = state.activeDraw!.spins.map(
           (sp) => state.participants.find((p) => p.id === sp.winnerId)!.name,
         );
-        assert.equal(posts, 0);
-        // No browser, socket, polling, or completion callback: only durable alarm runs.
-        await new Promise((resolve) => setTimeout(resolve, 8500));
         assert.equal(posts, 1);
         state = await snapshot(host);
         assert.equal(state.state, "finished");
@@ -351,7 +387,7 @@ for (const variant of ["beer", "coffee"] as const)
           mentionElements
             .filter((e) => e.type === "user")
             .map((e) => e.user_id),
-          ["U00000001"],
+          ["U00000003"],
         );
         assert.ok(
           mentionElements.some((e) => e.type === "text" && e.text === "Bob"),
@@ -381,6 +417,43 @@ for (const variant of ["beer", "coffee"] as const)
         await stub.crashRecovery();
         assert.equal((await snapshot(host)).slack?.result?.status, "uncertain");
         assert.equal((await command({ type: "slackRetry" })).status, 409);
+        assert.equal(posts, 3);
+        // A failed final read leaves the old roster visible but must not draw or post.
+        assert.equal((await command({ type: "reset" })).status, 200);
+        await stub.unlockImport();
+        mode = "read-reject";
+        assert.equal(
+          (
+            await command({
+              type: "setScheduledDraw",
+              startAt: new Date(Date.now() + 3000).toISOString(),
+            })
+          ).status,
+          200,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        state = await snapshot(host);
+        assert.equal(state.scheduledDraw?.status, "skipped");
+        assert.equal(state.activeDraw, undefined);
+        assert.equal(posts, 3);
+        await stub.runCompletion();
+        assert.equal(posts, 3);
+        await stub.revokeGrant();
+        const readsBeforeRevocation = readCalls;
+        assert.equal(
+          (
+            await command({
+              type: "setScheduledDraw",
+              startAt: new Date(Date.now() + 3000).toISOString(),
+            })
+          ).status,
+          200,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        state = await snapshot(host);
+        assert.equal(state.scheduledDraw?.status, "skipped");
+        assert.equal(state.activeDraw, undefined);
+        assert.equal(readCalls, readsBeforeRevocation);
         assert.equal(posts, 3);
         await stub.forceExpire();
         assert.equal((await call("/api/session", host)).status, 404);

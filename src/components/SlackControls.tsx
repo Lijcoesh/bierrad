@@ -1,13 +1,16 @@
 import { useTheme } from "../Theme";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { startSlackAutoRefresh } from "../utils/slackAutoRefresh";
 import type { SlackHostStatus } from "../../shared/protocol";
 export function SlackControls({
   status,
   locked,
   onImport,
   onManual,
+  scheduledStartAt,
 }: {
   status: SlackHostStatus;
+  scheduledStartAt?: string;
   locked: boolean;
   onImport: (link?: string) => Promise<void>;
   onManual: () => Promise<void>;
@@ -16,14 +19,45 @@ export function SlackControls({
   const [tab, setTab] = useState(status.source),
     [link, setLink] = useState("");
   const [error, setError] = useState("");
-  const busy = locked || status.importing;
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const busy = locked || status.importing || requesting;
+  const latest = useRef({ status, locked: busy, scheduledStartAt, onImport });
+  latest.current = { status, locked: busy, scheduledStartAt, onImport };
+  useEffect(() => {
+    if (status.source !== "slack") setAutoRefresh(false);
+  }, [status.source]);
+  useEffect(() => {
+    if (!autoRefresh) return;
+    return startSlackAutoRefresh(
+      () => latest.current,
+      async () => {
+        setRequesting(true);
+        setError("");
+        try {
+          await latest.current.onImport();
+        } finally {
+          setRequesting(false);
+        }
+      },
+      (e) =>
+        setError(
+          e instanceof Error
+            ? e.message
+            : "Automatisch ophalen is niet gelukt.",
+        ),
+    );
+  }, [autoRefresh]);
   const run = async (action: () => Promise<void>) => {
     setError("");
+    setRequesting(true);
     try {
       await action();
       setLink("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ophalen is niet gelukt.");
+    } finally {
+      setRequesting(false);
     }
   };
   return (
@@ -111,6 +145,19 @@ export function SlackControls({
               >
                 ↻ Opnieuw ophalen
               </button>
+              <label className="auto-refresh-toggle">
+                <input
+                  type="checkbox"
+                  checked={autoRefresh}
+                  disabled={!status.enabled}
+                  onChange={(event) => setAutoRefresh(event.target.checked)}
+                />
+                Automatisch verversen · elke 5 minuten
+              </label>
+              <p className="storage-note">
+                Zolang dit hostscherm openstaat. Pauzeert tijdens de trekking en
+                vanaf twee minuten vóór de geplande start.
+              </p>
               <p className="storage-note">
                 Verversen volgt de actuele reacties. Handmatig toegevoegde namen
                 blijven. De officiële uitslag gaat automatisch naar deze thread.

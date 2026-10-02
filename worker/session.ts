@@ -8,7 +8,7 @@ import {
 import { getCapabilities } from "../src/domain/capabilities";
 import { validateParticipants } from "../src/utils/participants";
 import type { BeerWheelSession, ClientRole } from "../src/domain/models";
-import type { PublicBeerWheelSession } from "../shared/protocol";
+import type { ScheduledDraw, PublicBeerWheelSession } from "../shared/protocol";
 
 export const TTL_MS = 8 * 60 * 60 * 1000;
 export const START_DELAY_MS = 2000;
@@ -33,6 +33,8 @@ export interface StoredSession {
   mutations: number;
   draws: number;
   slack?: SlackState;
+  scheduledDraw?: ScheduledDraw;
+  scheduleCheckUntil?: number;
 }
 export function newSession(
   hostHash: string,
@@ -82,11 +84,43 @@ export function publicSession(record: StoredSession): PublicBeerWheelSession {
           },
         }
       : {}),
+    ...(record.scheduledDraw
+      ? {
+          scheduledDraw: {
+            startAt: record.scheduledDraw.startAt,
+            status: record.scheduledDraw.status,
+          },
+        }
+      : {}),
     expiresAt: new Date(record.expiresAt).toISOString(),
     revision: record.revision,
   };
 }
+/** Only the durable alarm calls this after its final server-side Slack check. */
+export function executeScheduledDraw(
+  record: StoredSession,
+  now: number,
+  ready: boolean,
+): void {
+  const plan = record.scheduledDraw;
+  if (!plan || plan.status !== "refreshing" || now >= record.expiresAt) return;
+  record.scheduledDraw = { ...plan, status: "skipped" };
+  delete record.scheduleCheckUntil;
+  try {
+    if (!ready) throw new RequestError(409, "not_ready");
+    mutate(
+      record,
+      "host",
+      { type: "startDraw", revision: record.revision },
+      now,
+    );
+  } catch (error) {
+    if (!(error instanceof RequestError)) throw error;
+    record.revision++;
+  }
+}
 export function advance(record: StoredSession, now: number): boolean {
+  if (now >= record.expiresAt) return false;
   let s = record.session;
   if (
     s.state === "countdown" &&
@@ -104,6 +138,10 @@ export function nextDeadline(record: StoredSession): number {
   const s = record.session,
     draw = s.activeDraw;
   const times = [record.expiresAt];
+  if (record.scheduledDraw?.status === "pending")
+    times.push(Date.parse(record.scheduledDraw.startAt) - START_DELAY_MS);
+  if (record.scheduledDraw?.status === "refreshing")
+    times.push(record.scheduleCheckUntil ?? record.expiresAt);
   const slack = record.slack;
   if (slack?.importing) times.push(slack.importing.until);
   if (slack?.job?.status === "pending") times.push(slack.job.readyAt);
@@ -139,6 +177,7 @@ export function mutate(
   const allowed: Record<string, string[]> = {
     setParticipants: ["names"],
     setWinnerCount: ["count"],
+    setScheduledDraw: ["startAt"],
     startDraw: [],
     reset: [],
     endSession: [],
@@ -176,6 +215,11 @@ export function mutate(
     ["pending", "posting"].includes(record.slack.job.status)
   )
     throw new RequestError(409, "slack_posting");
+  if (
+    record.scheduledDraw?.status === "refreshing" &&
+    command.type !== "endSession"
+  )
+    throw new RequestError(409, "not_ready");
   const caps = getCapabilities(role, record.session);
   const require = (value: boolean) => {
     if (!value) throw new RequestError(409, "not_ready");
@@ -228,6 +272,27 @@ export function mutate(
       record.preferredCount = command.count;
       record.session = { ...record.session, winnerCount: command.count };
       break;
+    case "setScheduledDraw": {
+      require(caps.canManageParticipants);
+      if (command.startAt === null) {
+        delete record.scheduledDraw;
+        break;
+      }
+      const at =
+        typeof command.startAt === "string" ? Date.parse(command.startAt) : NaN;
+      if (
+        !Number.isFinite(at) ||
+        new Date(at).toISOString() !== command.startAt ||
+        at < now + START_DELAY_MS ||
+        at + 7250 >= record.expiresAt
+      )
+        throw new RequestError(400, "invalid_schedule");
+      record.scheduledDraw = {
+        startAt: command.startAt as string,
+        status: "pending",
+      };
+      break;
+    }
     case "startDraw":
       require(caps.canStartDraw);
       if (now + START_DELAY_MS + 5250 >= record.expiresAt)
@@ -241,10 +306,12 @@ export function mutate(
       };
       if (record.slack) delete record.slack.job;
       queueResult(record);
+      delete record.scheduledDraw;
       record.draws++;
       break;
     case "reset":
       require(caps.canReset);
+      delete record.scheduledDraw;
       record.session = createSession(
         record.session.id,
         record.session.participants,
@@ -257,7 +324,8 @@ export function mutate(
       delete record.slack.source;
       delete record.slack.syncedAt;
       delete record.slack.count;
-      record.slack.mapping = {};
+      // Keep private identities so a later import replaces these participants.
+      // Clearing the source above still disables Slack posting in manual mode.
       break;
     case "slackRetry": {
       const job = record.slack?.job;

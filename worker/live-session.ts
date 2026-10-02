@@ -15,6 +15,8 @@ import { DurableObject } from "cloudflare:workers";
 import { equalHash, hashSecret, parseCapability } from "./auth";
 import {
   advance,
+  executeScheduledDraw,
+  START_DELAY_MS,
   mutate,
   newSession,
   nextDeadline,
@@ -338,15 +340,80 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
       this.save(record);
       this.broadcast(record);
     }
+    await this.processScheduledDraw();
     await this.processSlackResult();
     const latest = this.read();
     if (latest && Date.now() < latest.expiresAt)
       await this.ctx.storage.setAlarm(nextDeadline(latest));
   }
+  private async processScheduledDraw() {
+    let record = this.read();
+    if (!record || Date.now() >= record.expiresAt) return;
+    const plan = record.scheduledDraw;
+    if (!plan || plan.status === "skipped") return;
+    if (plan.status === "refreshing") {
+      if ((record.scheduleCheckUntil ?? 0) <= Date.now()) {
+        executeScheduledDraw(record, Date.now(), false);
+        this.save(record);
+        this.broadcast(record);
+      }
+      return;
+    }
+    if (Date.now() < Date.parse(plan.startAt) - START_DELAY_MS) return;
+    record.scheduledDraw = { ...plan, status: "refreshing" };
+    record.scheduleCheckUntil = Date.now() + 120000;
+    record.revision++;
+    this.save(record);
+    this.broadcast(record);
+    await this.ctx.storage.setAlarm(nextDeadline(record));
+    record = this.read();
+    if (
+      !record ||
+      Date.now() >= record.expiresAt ||
+      record.scheduledDraw?.status !== "refreshing" ||
+      record.scheduledDraw.startAt !== plan.startAt
+    )
+      return;
+    let ready = Date.now() <= Date.parse(plan.startAt) + 60000;
+    if (ready && record.slack?.source) {
+      try {
+        // One separately rate-limited final check, even after a recent normal refresh.
+        const result = await this.importSlack(
+          record,
+          "host",
+          {
+            type: "slackImport",
+            revision: record.revision,
+          },
+          true,
+        );
+        ready = result.ok;
+      } catch {
+        ready = false;
+      }
+    }
+    record = this.read();
+    if (!record || Date.now() >= record.expiresAt) return;
+    if (
+      record.scheduledDraw?.status !== "refreshing" ||
+      record.scheduledDraw.startAt !== plan.startAt
+    )
+      return;
+    const authorized =
+      !record.slack?.source ||
+      slackAllowed(
+        record.slack.grantHash,
+        slackEnvironment(this.env, record.variant),
+      );
+    executeScheduledDraw(record, Date.now(), ready && authorized);
+    this.save(record);
+    this.broadcast(record);
+  }
   private async importSlack(
     record: StoredSession,
     role: ClientRole,
     raw: object,
+    finalCheck = false,
   ): Promise<Response> {
     const command = raw as Record<string, unknown>;
     if (
@@ -369,10 +436,15 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
       !getCapabilities(role, record.session).canManageParticipants
     )
       throw new RequestError(409, "not_ready");
+    if (!finalCheck && record.scheduledDraw?.status === "refreshing")
+      throw new RequestError(409, "not_ready");
     const state = record.slack!;
     if (
       (state.importing?.until ?? 0) > Date.now() ||
-      (state.nextImportAt ?? 0) > Date.now()
+      (state.retryImportAt ?? 0) > Date.now() ||
+      (finalCheck
+        ? (state.nextFinalImportAt ?? 0)
+        : (state.nextImportAt ?? 0)) > Date.now()
     )
       throw new RequestError(429, "slack_rate_limited");
     const source =
@@ -386,6 +458,7 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
     const id = crypto.randomUUID();
     state.importing = { id, until: Date.now() + 120000 };
     state.nextImportAt = Date.now() + 60000;
+    if (finalCheck) state.nextFinalImportAt = Date.now() + 60000;
     record.revision++;
     this.save(record);
     this.broadcast(record);
@@ -430,6 +503,7 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
           Date.now() +
             (error instanceof SlackError ? error.retryAfterMs : 60000),
         );
+        current.slack.retryImportAt = current.slack.nextImportAt;
         current.revision++;
         this.save(current);
         this.broadcast(current);

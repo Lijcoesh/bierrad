@@ -24,6 +24,8 @@ export interface SlackState {
   count?: number;
   importing?: { id: string; until: number };
   nextImportAt?: number;
+  nextFinalImportAt?: number;
+  retryImportAt?: number;
   job?: SlackJob;
 }
 /** Stable opaque identity; numbered display labels distinguish equal names without Slack IDs. */

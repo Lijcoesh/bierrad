@@ -1,6 +1,8 @@
 import { useTheme } from "./Theme";
 import { localHash } from "../shared/variant";
 import { SlackControls, SlackResultStatus } from "./components/SlackControls";
+import { ScheduleControls } from "./components/ScheduleControls";
+import { formatScheduledTime } from "./utils/schedule";
 import { PlaybackClock } from "./hooks/PlaybackClock";
 import { useCallback, useState } from "react";
 import { WheelGrid } from "./components/WheelGrid";
@@ -31,7 +33,8 @@ export default function App({ controller }: { controller: SessionController }) {
   const [forcedIds, setForcedIds] = useState<string[]>([]);
   const closeSecret = useCallback(() => setSecretOpen(false), []);
   const notice = error || sessionNotice || uiNotice;
-  const slackBusy = !!live?.slack?.importing;
+  const slackBusy =
+    !!live?.slack?.importing || live?.scheduledDraw?.status === "refreshing";
   const slackPosting =
     !!live?.slack?.result &&
     ["pending", "posting"].includes(live.slack.result.status);
@@ -179,6 +182,13 @@ export default function App({ controller }: { controller: SessionController }) {
                 </p>
               </div>
             )}
+            {live?.scheduledDraw?.status === "pending" && (
+              <p className="helper" role="status">
+                ⏰ Start automatisch{" "}
+                {formatScheduledTime(live.scheduledDraw.startAt)} (Nederlandse
+                tijd).
+              </p>
+            )}
             {live?.role === "host" && live.slack && (
               <SlackResultStatus
                 status={live.slack}
@@ -199,6 +209,11 @@ export default function App({ controller }: { controller: SessionController }) {
                   <SlackControls
                     status={live.slack}
                     locked={!capabilities.canManageParticipants || pending}
+                    scheduledStartAt={
+                      live.scheduledDraw?.status === "pending"
+                        ? live.scheduledDraw.startAt
+                        : undefined
+                    }
                     onImport={(link) => controller.importSlack!(link)}
                     onManual={() => controller.useManualSource!()}
                   />
@@ -216,6 +231,19 @@ export default function App({ controller }: { controller: SessionController }) {
                 void run(() => controller.restoreParticipants());
               }}
             />
+            {live?.role === "host" &&
+              live.expiresAt &&
+              controller.setScheduledDraw && (
+                <ScheduleControls
+                  plan={live.scheduledDraw}
+                  expiresAt={live.expiresAt}
+                  locked={
+                    !capabilities.canManageParticipants || pending || slackBusy
+                  }
+                  clockOffsetMs={clockOffsetMs}
+                  onSave={(at) => controller.setScheduledDraw!(at)}
+                />
+              )}
             <div className="how-it-works">
               <span>✦</span>
               <div>

@@ -13,6 +13,7 @@ export interface LiveInfo {
   status: ConnectionStatus;
   expiresAt?: string;
   slack?: import("../../shared/protocol").SlackHostStatus;
+  scheduledDraw?: import("../../shared/protocol").ScheduledDraw;
 }
 export interface SessionSnapshot {
   readonly session: BeerWheelSession;
@@ -31,6 +32,7 @@ export interface SessionController {
   /** Remote sessions ignore the rig: the server alone picks winners. */
   startDraw(rig?: import("../utils/random").DrawRig): Promise<void>;
   reset(): Promise<void>;
+  setScheduledDraw?(startAt: string | null): Promise<void>;
   importSlack?(permalink?: string): Promise<void>;
   useManualSource?(): Promise<void>;
   retrySlackResult?(): Promise<void>;

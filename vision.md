@@ -495,7 +495,7 @@ Een Cloudflare Worker met een Durable Object per sessie beheert livegegevens en 
 
 ## Geplande vrijdagtrekkingen
 
-Naast hostbediening kan later een automatische trekking bestaan, bijvoorbeeld op vrijdag om 15:30. De deelnemers zijn vooraf geladen, alle schermen tonen een countdown, alle raderen starten automatisch op de gedeelde starttijd en onthullen hun winnaars kort na elkaar. Tot slot verschijnen alle namen en kan de uitslag in de oorspronkelijke Slack-thread worden geplaatst.
+Naast hostbediening kan een automatische trekking voor de huidige live-sessie worden ingesteld, standaard vrijdag om 15:45 Nederlandse tijd. De start moet binnen de tijdelijke sessieduur vallen. Vlak voor de trekking worden Slack-reacties opnieuw gecontroleerd; bij een mislukte controle wordt de start overgeslagen. De deelnemers zijn vooraf geladen, alle schermen tonen een countdown, alle raderen starten automatisch op de gedeelde starttijd en onthullen hun winnaars kort na elkaar. Tot slot verschijnen alle namen en kan de uitslag in de oorspronkelijke Slack-thread worden geplaatst.
 
 Slack blijft de ingang voor deelname via `:beers:` en voor de uitslag. Slack-credentials blijven uitsluitend op de backend. Handmatige lokale deelname blijft altijd mogelijk.
 
@@ -503,10 +503,10 @@ Slack blijft de ingang voor deelname via `:beers:` en voor de uitslag. Slack-cre
 
 Een toeschouwer die tijdens het draaien opent, ontvangt de actuele sessie met de oorspronkelijke starttijd en volledige `DrawInstruction` met alle spins. Het scherm moet op het juiste punt instappen of een al voltooide uitslag tonen, zonder zelf opnieuw te loten. De remote controller schat het klokverschil, verbindt opnieuw met oplopende wachttijd en haalt de actuele serverstand op.
 
-LocalSessionController en RemoteSessionController gebruiken dezelfde radcomponenten. Meerdere kijkers, tijdelijke host-/kijkrechten, WebSockets en herstel na verbindingsverlies zijn geïmplementeerd. Gebruikersaccounts en automatische planning blijven toekomstwerk. Slack-import en automatische threadresultaten zijn optioneel beschikbaar na serverconfiguratie. Een deelbare link verleent tijdelijke toegang en is geen volledige gebruikersauthenticatie.
+LocalSessionController en RemoteSessionController gebruiken dezelfde radcomponenten. Meerdere kijkers, tijdelijke host-/kijkrechten, WebSockets en herstel na verbindingsverlies zijn geïmplementeerd. Gebruikersaccounts en wekelijks herhalende planning blijven toekomstwerk. Een eenmalige automatische start binnen de huidige live-sessie is beschikbaar. Slack-import en automatische threadresultaten zijn optioneel beschikbaar na serverconfiguratie. Een deelbare link verleent tijdelijke toegang en is geen volledige gebruikersauthenticatie.
 
 # Koffierad — uitbreiding 2026-09-28
 
 Koffierad bepaalt uitsluitend **wie koffie haalt**, niet wie koffie zet of welke koffiesoort iemand drinkt. Dezelfde spanning, deterministische raderen en standalone bruikbaarheid gelden voor beide varianten. De website biedt een wissel en directe koffielink. Persoonlijke raden starten leeg met standaardinstellingen; eerder ingevoerde deelnemers kunnen per variant bewust worden hersteld; live-sessies hebben één onveranderlijke variant.
 
-Slack blijft de ingang: een aparte Koffierad-app importeert uitsluitend `:coffee:` op het gekozen hoofdbericht en publiceert de serveruitslag in dezelfde thread, met ☕ en officiële winnaarvermeldingen. Bier behoudt `:beers:`. Elke app heeft eigen servercredentials en organisator-starttoegang. Slashcommando's en automatische planning zijn niet geïmplementeerd.
+Slack blijft de ingang: een aparte Koffierad-app importeert uitsluitend `:coffee:` op het gekozen hoofdbericht en publiceert de serveruitslag in dezelfde thread, met ☕ en officiële winnaarvermeldingen. Bier behoudt `:beers:`. Elke app heeft eigen servercredentials en organisator-starttoegang. Slashcommando's en wekelijks herhalende planning zijn niet geïmplementeerd. Een eenmalige automatische start is beschikbaar voor beide varianten.

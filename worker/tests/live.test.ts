@@ -211,6 +211,10 @@ test(
         { type: "setParticipants", names: [] },
         { type: "setWinnerCount", count: 1 },
         { type: "startDraw" },
+        {
+          type: "setScheduledDraw",
+          startAt: new Date(Date.now() + 60000).toISOString(),
+        },
         { type: "reset" },
         { type: "endSession" },
       ])

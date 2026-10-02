@@ -954,3 +954,40 @@ footer b {
 [data-variant="coffee"] .count-stepper {
   background: #ecddc9;
 }
+
+.schedule-controls {
+  margin-top: 16px;
+  padding: 22px;
+  border: 1px solid #dfd4c4;
+  border-radius: 18px;
+  background: #fffaf3;
+  display: grid;
+  gap: 12px;
+}
+.schedule-controls h3,
+.schedule-controls p {
+  margin: 0;
+}
+.schedule-controls input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.schedule-controls button {
+  padding: 12px;
+  border: 1px solid #d9c5af;
+  border-radius: 12px;
+  background: #f4e6cc;
+}
+.auto-refresh-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  font-size: 14px;
+}
+.slack-import .auto-refresh-toggle input {
+  width: auto;
+  flex: 0 0 auto;
+  margin: 0;
+}

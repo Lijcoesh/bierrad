@@ -411,3 +411,56 @@ test("mentions use frozen server identity, never a display name or browser-suppl
     ),
   );
 });
+
+test("refresh after manual mode retains Slack identities without duplicating participants", () => {
+  const now = Date.now();
+  const record = newSession("host", "spectator", now);
+  record.slack = { grantHash: "hash", mapping: {} };
+  const people = [
+    { slackId: "U00000001", name: "Alice" },
+    { slackId: "U00000002", name: "Alice" },
+  ];
+  reconcile(record, source, people, now);
+  const ids = { ...record.slack.mapping };
+  mutate(
+    record,
+    "host",
+    { type: "slackManual", revision: record.revision },
+    now,
+  );
+  assert.equal(record.slack.source, undefined);
+  mutate(
+    record,
+    "host",
+    {
+      type: "setParticipants",
+      revision: record.revision,
+      names: ["Alice", "Alice (2)", "Bob"],
+    },
+    now,
+  );
+  mutate(record, "host", { type: "startDraw", revision: record.revision }, now);
+  assert.equal(record.slack.job, undefined);
+  advance(record, now + 10000);
+  mutate(
+    record,
+    "host",
+    { type: "reset", revision: record.revision },
+    now + 10000,
+  );
+  for (let attempt = 0; attempt < 3; attempt++) {
+    reconcile(record, source, people, now + 10000);
+    assert.deepEqual(
+      record.session.participants.map((p) => p.name),
+      ["Bob", "Alice", "Alice (2)"],
+    );
+    assert.deepEqual(record.slack.mapping, ids);
+  }
+  reconcile(record, source, [{ ...people[0], name: "Alex" }], now + 10000);
+  assert.deepEqual(
+    record.session.participants.map((p) => p.name),
+    ["Bob", "Alex"],
+  );
+  assert.equal(record.slack.mapping[people[0].slackId], ids[people[0].slackId]);
+  assert.ok(!JSON.stringify(publicSession(record)).includes("U00000001"));
+});

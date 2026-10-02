@@ -5,6 +5,10 @@ import type {
   Participant,
   ClientRole,
 } from "../src/domain/models";
+export interface ScheduledDraw {
+  startAt: string;
+  status: "pending" | "refreshing" | "skipped";
+}
 export interface SlackHostStatus {
   enabled: boolean;
   source: "manual" | "slack";
@@ -28,11 +32,13 @@ export interface PublicBeerWheelSession {
   expiresAt: string;
   revision: number;
   slack?: SlackHostStatus;
+  scheduledDraw?: ScheduledDraw;
 }
 export type HostCommand =
   | { type: "setParticipants"; names: string[] }
   | { type: "setWinnerCount"; count: number }
   | { type: "startDraw" }
+  | { type: "setScheduledDraw"; startAt: string | null }
   | { type: "reset" }
   | { type: "endSession" }
   | { type: "slackImport"; permalink?: string }

@@ -97,6 +97,8 @@ test("remote late join uses server state and clock offset, rejects spectator com
     );
     for (const operation of [
       () => controller.startDraw(),
+      () =>
+        controller.setScheduledDraw(new Date(serverNow + 60000).toISOString()),
       () => controller.reset(),
       () => controller.setParticipants([]),
       () => controller.setWinnerCount(1),

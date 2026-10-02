@@ -83,6 +83,7 @@ export class RemoteSessionController implements SessionController {
   private lastReceived = 0;
   private expiresAt?: string;
   private slack?: PublicBeerWheelSession["slack"];
+  private scheduledDraw?: PublicBeerWheelSession["scheduledDraw"];
   private connecting = false;
   private readonly fetcher: typeof fetch;
   constructor(private readonly options: RemoteOptions) {
@@ -119,6 +120,7 @@ export class RemoteSessionController implements SessionController {
         status,
         expiresAt: this.expiresAt,
         slack: this.slack,
+        scheduledDraw: this.scheduledDraw,
       },
     });
   }
@@ -144,6 +146,7 @@ export class RemoteSessionController implements SessionController {
     this.revision = dto.revision;
     this.slack = this.options.role === "host" ? dto.slack : undefined;
     this.expiresAt = dto.expiresAt;
+    this.scheduledDraw = dto.scheduledDraw;
     const oldDraw = this.snapshot.session.activeDraw;
     const session: BeerWheelSession = Object.freeze({
       id: "live",
@@ -170,6 +173,7 @@ export class RemoteSessionController implements SessionController {
   private unavailable() {
     this.terminal = true;
     this.slack = undefined;
+    this.scheduledDraw = undefined;
     clearTimeout(this.retry);
     clearTimeout(this.expiry);
     clearInterval(this.heartbeat);
@@ -209,6 +213,8 @@ export class RemoteSessionController implements SessionController {
         code?: string;
       };
       const slackMessages: Record<string, string> = {
+        invalid_schedule:
+          "Kies een toekomstig tijdstip dat binnen deze live-sessie past.",
         slack_link:
           "Plak een volledige Slack-berichtlink. Een threadlink verwijst naar het hoofdbericht.",
         slack_incomplete:
@@ -382,6 +388,9 @@ export class RemoteSessionController implements SessionController {
   }
   setWinnerCount(count: number) {
     return this.command({ type: "setWinnerCount", count });
+  }
+  setScheduledDraw(startAt: string | null) {
+    return this.command({ type: "setScheduledDraw", startAt });
   }
   startDraw() {
     return this.command({ type: "startDraw" });
