@@ -14,7 +14,14 @@ import {
   LoginError,
   parseLoginCookie,
 } from "./slack/login";
-import { randomHex, parseCapability, hashSecret } from "./auth";
+import {
+  randomHex,
+  randomWords,
+  parseCapability,
+  capabilityLocator,
+  hashSecret,
+  wordLocator,
+} from "./auth";
 import { json, readBody, redirect } from "./http";
 import { RequestError } from "./session";
 export { LiveSession } from "./live-session";
@@ -25,9 +32,9 @@ async function createSession(
   variant: WheelVariant,
   grant?: { hash: string; expiresAt: number },
 ): Promise<CreatedSession> {
-  const locator = randomHex(16),
-    host = randomHex(),
-    spectator = randomHex();
+  const spectator = randomWords(),
+    locator = await wordLocator(spectator),
+    host = randomHex();
   const [hostHash, spectatorHash] = await Promise.all([
     hashSecret(host),
     hashSecret(spectator),
@@ -40,7 +47,7 @@ async function createSession(
   );
   return {
     hostCapability: `${locator}.${host}`,
-    spectatorCapability: `${locator}.${spectator}`,
+    spectatorCapability: spectator,
     expiresAt,
   };
 }
@@ -192,7 +199,9 @@ export default {
               null);
           const capability = parseCapability(raw);
           if (!capability) throw new RequestError(404, "unavailable");
-          const stub = env.SESSIONS.getByName(capability.locator);
+          const stub = env.SESSIONS.getByName(
+            await capabilityLocator(capability),
+          );
           if (socket) {
             if (
               request.headers.get("Upgrade")?.toLowerCase() !== "websocket" ||

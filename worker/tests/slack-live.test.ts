@@ -310,7 +310,7 @@ for (const variant of ["beer", "coffee"] as const)
         );
         assert.match(createdResponse.headers.get("set-cookie")!, /Max-Age=0/);
         const landing =
-          /^http:\/\/127\.0\.0\.1:5173\/#\/host\/([a-f0-9]{32}\.[a-f0-9]{64})\/([a-f0-9]{32}\.[a-f0-9]{64})$/.exec(
+          /^http:\/\/127\.0\.0\.1:5173\/#\/host\/([a-f0-9]{32}\.[a-f0-9]{64})\/([a-z]+(?:-[a-z]+){12})$/.exec(
             createdResponse.headers.get("location")!,
           );
         assert.ok(landing);
