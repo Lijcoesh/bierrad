@@ -115,6 +115,10 @@ Explicitly requested by the user, reviewed against every SECURITY.md section; SE
 
 Tests (synthetic data only) cover cookie attributes and parsing, forged, missing, duplicate and cancelled states, rejected codes, each claim, workspace mismatch, guests, strangers, deleted users, bots and apps, user-token revocation, secrets kept out of URLs, the closed legacy endpoint, legacy grant validation, the fixed login ceiling and the full Worker flow for both variants through Miniflare.
 
+## Legacy start-link grants removed (2026-10-02)
+
+Requested by the user after Sign in with Slack went live; reviewed against SECURITY.md, which now states that start-link grants are no longer accepted. `slackAllowed` and `slackCeiling` only accept the `slack-login` marker with login, bot and client secrets configured; every other stored grant hash fails closed, even if `SLACK_START_GRANT`/`COFFEE_SLACK_START_GRANT` is still set. These secrets are no longer read and can be deleted. Sessions started with a start link keep working manually but lose Slack import, planning, retry and posting. No new permissions, API methods, dependencies, public variables, storage or logging. Synthetic tests cover a legacy hash being refused with a leftover start-grant secret, both directly and through the real Worker.
+
 ## Spectator-link reminder before scheduled draws
 
 The user explicitly requested on 2026-10-02 that a scheduled draw posts the spectator link to the Slack thread two minutes ahead. Reviewed against every SECURITY.md section; SECURITY.md now records this exception.

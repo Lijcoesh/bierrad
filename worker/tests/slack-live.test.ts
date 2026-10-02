@@ -76,7 +76,7 @@ for (const variant of ["beer", "coffee"] as const)
                 [variant === "coffee"
                   ? "COFFEE_SLACK_CLIENT_SECRET"
                   : "SLACK_CLIENT_SECRET"]: clientSecret,
-                // Legacy start-link grant: only validates pre-existing sessions.
+                // A leftover start-link secret must not revive legacy sessions.
                 [variant === "coffee"
                   ? "COFFEE_SLACK_START_GRANT"
                   : "SLACK_START_GRANT"]: JSON.stringify({
@@ -499,7 +499,7 @@ for (const variant of ["beer", "coffee"] as const)
           Date.parse((await snapshot(host)).expiresAt),
           later + 3600000,
         );
-        // Sessions started with a legacy start link keep validating that grant.
+        // Sessions started with a legacy start link no longer have Slack rights.
         await stub.legacyGrant(legacyHash);
         assert.equal(
           (
@@ -508,16 +508,7 @@ for (const variant of ["beer", "coffee"] as const)
               startAt: new Date(Date.now() + 2.5 * 24 * 3600000).toISOString(),
             })
           ).status,
-          200,
-        );
-        assert.equal(
-          (
-            await command({
-              type: "setScheduledDraw",
-              startAt: new Date(Date.now() + 4 * 24 * 3600000).toISOString(),
-            })
-          ).status,
-          400,
+          403,
         );
         await stub.loginGrant();
         assert.equal(

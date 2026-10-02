@@ -238,7 +238,7 @@ test("refresh retains opaque IDs and manual additions, distinguishes equal names
     ["Alice"],
   );
 });
-test("login sessions need bot and login secrets; legacy grants still expire and rotate; public sessions get no Slack rights", async () => {
+test("login sessions need bot and login secrets; legacy start-link grants and public sessions get no Slack rights", async () => {
   const login = {
     SLACK_BOT_TOKEN: "synthetic",
     SLACK_CLIENT_ID: "1000000000.2000000000",
@@ -269,36 +269,20 @@ test("login sessions need bot and login secrets; legacy grants still expire and 
     ),
     undefined,
   );
+  // Former start-link sessions stored a 64-hex grant hash; it no longer
+  // confers Slack rights, even if an old start-grant secret is still set.
   const hash = await hashSecret(randomHex());
-  const env = {
-    SLACK_BOT_TOKEN: "synthetic",
+  const legacy = {
+    ...login,
     SLACK_START_GRANT: JSON.stringify({ hash, expiresAt: Date.now() + 10000 }),
   };
-  assert.equal(slackAllowed(hash, env), true);
-  assert.equal(slackAllowed(LOGIN_GRANT, env), false);
-  assert.ok(slackCeiling({ grantHash: hash }, env));
-  assert.equal(slackAllowed(undefined, env), false);
+  assert.equal(slackAllowed(hash, legacy), false);
+  assert.equal(slackCeiling({ grantHash: hash }, legacy), undefined);
   assert.equal(
-    slackAllowed(hash, { ...env, SLACK_BOT_TOKEN: undefined }),
-    false,
+    slackCeiling({ grantHash: hash, grantExpiresAt: Date.now() + 10000 }, login),
+    undefined,
   );
-  assert.equal(
-    slackAllowed(hash, {
-      ...env,
-      SLACK_START_GRANT: JSON.stringify({ hash, expiresAt: 1 }),
-    }),
-    false,
-  );
-  assert.equal(
-    slackAllowed(hash, {
-      ...env,
-      SLACK_START_GRANT: JSON.stringify({
-        hash: await hashSecret(randomHex()),
-        expiresAt: Date.now() + 10000,
-      }),
-    }),
-    false,
-  );
+  assert.equal(slackAllowed(undefined, login), false);
 });
 test("posting freezes official winners/target; thread-only safe singular/plural; failure never changes draw", async () => {
   const now = Date.now(),
