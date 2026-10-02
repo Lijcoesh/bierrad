@@ -37,26 +37,17 @@ function endpoint(api: string, path: string): string {
 }
 export async function createLiveSession(
   apiUrl: string,
-  startCapability?: string,
   variant: WheelVariant = "beer",
 ): Promise<CreatedSession> {
-  const response = await fetch(
-    endpoint(apiUrl, startCapability ? "/api/slack-sessions" : "/api/sessions"),
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(startCapability
-          ? { Authorization: `Bearer ${startCapability}` }
-          : {}),
-      },
-      body: JSON.stringify({ variant }),
-      cache: "no-store",
-      credentials: "omit",
-      referrerPolicy: "no-referrer",
-      signal: AbortSignal.timeout(10000),
-    },
-  );
+  const response = await fetch(endpoint(apiUrl, "/api/sessions"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ variant }),
+    cache: "no-store",
+    credentials: "omit",
+    referrerPolicy: "no-referrer",
+    signal: AbortSignal.timeout(10000),
+  });
   if (!response.ok)
     throw new Error(
       response.status === 429
@@ -225,7 +216,7 @@ export class RemoteSessionController implements SessionController {
         invalid_schedule:
           "Kies een toekomstig tijdstip binnen de komende 30 dagen.",
         schedule_access_expires:
-          "De Slack-toegang is niet lang genoeg geldig voor deze planning plus één uur. Gebruik een nieuwe privé-startlink met langere geldigheid.",
+          "De Slack-toegang van deze sessie is niet lang genoeg geldig voor deze planning plus één uur. Start een nieuw rad via Inloggen met Slack.",
         slack_link:
           "Plak een volledige Slack-berichtlink. Een threadlink verwijst naar het hoofdbericht.",
         slack_incomplete:

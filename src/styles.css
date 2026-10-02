@@ -743,7 +743,8 @@ footer b {
   background: #f2ecdd;
   font-size: 14px;
 }
-.live-bar button {
+.live-bar button,
+.live-bar a.button-link {
   border: 1px solid #d4c7a7;
   border-radius: 20px;
   padding: 8px 14px;
@@ -768,6 +769,12 @@ footer b {
 }
 .unavailable a {
   text-decoration: underline;
+}
+.live-bar a.button-link,
+.unavailable a.primary {
+  display: inline-block;
+  color: inherit;
+  text-decoration: none;
 }
 
 .source-tabs button[aria-pressed="true"] {

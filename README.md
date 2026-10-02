@@ -163,12 +163,12 @@ Vlak vóór de automatische trekking controleert de server de Slack-reacties nog
 
 ## Slack-deelnemers en threaduitslag
 
-Een bevoegde organisator kan via een **privé-startlink** een Slack-sessie openen. Een gewone publieke host heeft geen Slack-toegang. Kies Slack, plak een berichtlink en haal de `:beers:`-reactors op. Refresh volgt de reacties en behoudt handmatige toevoegingen; gelijke namen krijgen onderscheidende labels met stabiele tijdelijke IDs. Na de trekking post de server de officiële winnaars automatisch in de oorspronkelijke thread, ook als de host gesloten is. Geïmporteerde Slack-winnaars krijgen een echte @vermelding; handmatige deelnemers blijven gewone tekst. Fouten veranderen de uitslag niet; alleen zeker afgewezen posts kunnen gecontroleerd opnieuw worden aangeboden. Bij onzekere aflevering voorkomt Bierrad herverzending.
+Een volwaardig lid van de Slack-workspace start een Slack-sessie met **Start met Slack** (Sign in with Slack). Een gewone publieke host, gast of externe gebruiker heeft geen Slack-starttoegang. Kies Slack, plak een berichtlink en haal de `:beers:`-reactors op. Refresh volgt de reacties en behoudt handmatige toevoegingen; gelijke namen krijgen onderscheidende labels met stabiele tijdelijke IDs. Na de trekking post de server de officiële winnaars automatisch in de oorspronkelijke thread, ook als de host gesloten is. Geïmporteerde Slack-winnaars krijgen een echte @vermelding; handmatige deelnemers blijven gewone tekst. Fouten veranderen de uitslag niet; alleen zeker afgewezen posts kunnen gecontroleerd opnieuw worden aangeboden. Bij onzekere aflevering voorkomt Bierrad herverzending.
 
 [Appmanifest en veilige instelling](docs/slack-setup.md) · [Security review en tien antwoorden](docs/slack-security-review.md)
 
 ```text
-Privé-startcapability → geautoriseerde tijdelijke Slack-sessie
+Sign in with Slack (alleen server) → geautoriseerde tijdelijke Slack-sessie
 SlackReactionParticipantSource (alleen server)
           ↓ veilige sessie-ID's + namen
 SessionController → Draw Engine → DrawInstruction → Wheel Renderers
@@ -176,13 +176,13 @@ SessionController → Draw Engine → DrawInstruction → Wheel Renderers
                   officiële uitslag → oorspronkelijke Slack-thread
 ```
 
-`worker/slack` bevat de getypeerde client, parser, deelnemersbron, private mapping en resultaattekst. `POST /api/slack-sessions` vereist de aparte startcapability in Authorization; overige hostcommando's zijn `slackImport` (optioneel permalink, zonder link = refresh), `slackManual`, `slackRetry`. Ook gemanipuleerde spectatorrequests worden afgewezen. Spectator-DTO's bevatten geen Slack-metadata. De raderen/selectie zijn ongewijzigd en blijven zonder netwerk of Slack functioneren.
+`worker/slack` bevat de getypeerde client, parser, deelnemersbron, private mapping en resultaattekst. `worker/slack/login.ts` doet de inlogflow via `GET /auth/slack/<beer|coffee>` en `GET /auth/slack/callback`; hostcommando's zijn `slackImport` (optioneel permalink, zonder link = refresh), `slackManual`, `slackRetry`. Ook gemanipuleerde spectatorrequests worden afgewezen. Spectator-DTO's bevatten geen Slack-metadata. De raderen/selectie zijn ongewijzigd en blijven zonder netwerk of Slack functioneren.
 
 ## Koffierad ☕
 
 Naast Bierrad is er **Koffierad: wie haalt de volgende koffie?** Kies bovenaan je variant of open de site met `#/coffee` (bier: `#/beer`; de bestaande lege route blijft Bierrad). Beide gebruiken dezelfde radlogica. Koffie heeft warme crème-/espressokleuren en eigen teksten en een apart opgeslagen deelnemerslijst voor handmatig herstel. Beide varianten starten leeg met de standaard aantalvoorkeur. Wisselen start een lokale variant; tijdens draaien is de wissel geblokkeerd. Er is geen permanente uitslaghistorie.
 
-De variant van een live-sessie staat vanaf creatie vast op de server; host en kijkers ontvangen hetzelfde thema. Oude sessies en links blijven bier. `POST /api/sessions` en `POST /api/slack-sessions` accepteren `{}` voor bier of een body met uitsluitend `variant`, met waarde `beer` of `coffee`. Koffie krijgt een **eigen Slack-app** met eigen servercredentials, privé-startlink, `:coffee:`-reacties en koffie-uitslagen. Zie [Koffierad instellen](docs/slack-setup.md#aparte-koffierad-app). De implementatie gebruikt privé-startlinks, geen slashcommando's of automatische kanaalposts.
+De variant van een live-sessie staat vanaf creatie vast op de server; host en kijkers ontvangen hetzelfde thema. Oude sessies en links blijven bier. `POST /api/sessions` accepteert `{}` voor bier of een body met uitsluitend `variant`, met waarde `beer` of `coffee`. Koffie krijgt een **eigen Slack-app** met eigen servercredentials, eigen inloggen, `:coffee:`-reacties en koffie-uitslagen. Zie [Koffierad instellen](docs/slack-setup.md#aparte-koffierad-app). De implementatie gebruikt Sign in with Slack, geen slashcommando's of automatische kanaalposts.
 
 ## Linkvoorbeelden
 

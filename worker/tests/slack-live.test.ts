@@ -10,13 +10,16 @@ import type {
 
 for (const variant of ["beer", "coffee"] as const)
   test(
-    `${variant} Slack Worker: private starts, authorization, DTO privacy, refresh, disconnected completion and durable idempotency`,
+    `${variant} Slack Worker: Sign in with Slack starts, authorization, DTO privacy, refresh, disconnected completion and durable idempotency`,
     { timeout: 45000 },
     async () => {
       const reaction = variant === "coffee" ? "coffee" : "beers";
       const credential = `synthetic-${variant}-credential`;
-      const invite = randomHex(),
-        hash = await hashSecret(invite);
+      const clientId = "1000000000.2000000000",
+        clientSecret = `synthetic-${variant}-client-secret`;
+      const legacyHash = await hashSecret(randomHex());
+      let nonce = "",
+        loginUser: Record<string, unknown> = {};
       const source = await readFile("worker-dist/index.js", "utf8");
       let posts = 0,
         mode = "success",
@@ -35,7 +38,10 @@ for (const variant of ["beer", "coffee"] as const)
                 `\nexport class TestSession extends LiveSession {
       edit(fn) { const r = JSON.parse(this.ctx.storage.sql.exec('SELECT value FROM session WHERE singleton = 1').one().value); fn(r); this.ctx.storage.sql.exec('UPDATE session SET value = ? WHERE singleton = 1', JSON.stringify(r)); }
       runCompletion() { return this.alarm(); }
-      legacyExpiry() { this.edit(r => { r.expiresAt = Date.now() + 30000; delete r.slack.grantExpiresAt; }); }
+      shortExpiry() { this.edit(r => { r.expiresAt = Date.now() + 30000; }); }
+      ceiling(ms) { this.edit(r => { r.slack.grantExpiresAt = Date.now() + ms; }); }
+      legacyGrant(hash) { this.edit(r => { r.slack.grantHash = hash; delete r.slack.grantExpiresAt; }); }
+      loginGrant() { this.edit(r => { r.slack.grantHash = "slack-login"; r.slack.grantExpiresAt = Date.now() + 31 * 24 * 3600000; }); }
       revokeGrant() { this.edit(r => { r.slack.grantHash = "revoked-synthetic"; }); }
       unlockImport() { this.edit(r => { r.slack.nextImportAt = 0; r.slack.nextFinalImportAt = 0; r.slack.retryImportAt = 0; }); }
       unlockRetry() { this.edit(r => { r.slack.job.retryAt = 0; }); }
@@ -50,22 +56,31 @@ for (const variant of ["beer", "coffee"] as const)
               },
               bindings: {
                 ALLOWED_ORIGINS: "http://127.0.0.1:5173",
+                FRONTEND_URL: "http://127.0.0.1:5173/",
                 [variant === "coffee"
                   ? "SLACK_BOT_TOKEN"
                   : "COFFEE_SLACK_BOT_TOKEN"]: "synthetic-other-app",
                 [variant === "coffee"
-                  ? "SLACK_START_GRANT"
-                  : "COFFEE_SLACK_START_GRANT"]: JSON.stringify({
-                  hash: await hashSecret(randomHex()),
-                  expiresAt: Date.now() + 3 * 24 * 3600000,
-                }),
+                  ? "SLACK_CLIENT_ID"
+                  : "COFFEE_SLACK_CLIENT_ID"]: "1000000000.3000000000",
+                [variant === "coffee"
+                  ? "SLACK_CLIENT_SECRET"
+                  : "COFFEE_SLACK_CLIENT_SECRET"]:
+                  "synthetic-other-client-secret",
                 [variant === "coffee"
                   ? "COFFEE_SLACK_BOT_TOKEN"
                   : "SLACK_BOT_TOKEN"]: credential,
                 [variant === "coffee"
+                  ? "COFFEE_SLACK_CLIENT_ID"
+                  : "SLACK_CLIENT_ID"]: clientId,
+                [variant === "coffee"
+                  ? "COFFEE_SLACK_CLIENT_SECRET"
+                  : "SLACK_CLIENT_SECRET"]: clientSecret,
+                // Legacy start-link grant: only validates pre-existing sessions.
+                [variant === "coffee"
                   ? "COFFEE_SLACK_START_GRANT"
                   : "SLACK_START_GRANT"]: JSON.stringify({
-                  hash,
+                  hash: legacyHash,
                   expiresAt: Date.now() + 3 * 24 * 3600000,
                 }),
               },
@@ -87,10 +102,44 @@ for (const variant of ["beer", "coffee"] as const)
                 const url = new URL(req.url);
                 traces.push(url.origin + url.pathname);
                 assert.equal(url.origin, "https://slack.com");
+                if (url.pathname === "/api/openid.connect.token") {
+                  assert.equal(req.headers.get("authorization"), null);
+                  const form = new URLSearchParams(await req.text());
+                  assert.equal(form.get("client_id"), clientId);
+                  assert.equal(form.get("client_secret"), clientSecret);
+                  assert.equal(form.get("code"), "synthetic-code");
+                  assert.equal(
+                    form.get("redirect_uri"),
+                    "http://localhost/auth/slack/callback",
+                  );
+                  const part = (v: object) =>
+                    btoa(JSON.stringify(v)).replace(/=+$/, "");
+                  return Response.json({
+                    ok: true,
+                    access_token: "synthetic-user-credential",
+                    id_token: `${part({})}.${part({
+                      iss: "https://slack.com",
+                      aud: clientId,
+                      exp: Math.floor(Date.now() / 1000) + 300,
+                      nonce,
+                      sub: "U00000007",
+                      "https://slack.com/team_id": "T00000001",
+                    })}.c2ln`,
+                  });
+                }
+                if (url.pathname === "/api/auth.revoke") {
+                  assert.equal(
+                    req.headers.get("authorization"),
+                    "Bearer synthetic-user-credential",
+                  );
+                  return Response.json({ ok: true, revoked: true });
+                }
                 assert.equal(
                   req.headers.get("authorization"),
                   `Bearer ${credential}`,
                 );
+                if (url.pathname === "/api/auth.test")
+                  return Response.json({ ok: true, team_id: "T00000001" });
                 if (url.pathname.endsWith("reactions.get")) {
                   readCalls++;
                   if (mode === "read-reject")
@@ -120,9 +169,13 @@ for (const variant of ["beer", "coffee"] as const)
                     ok: true,
                     user: {
                       id: url.searchParams.get("user"),
+                      team_id: "T00000001",
                       deleted: false,
                       is_bot: false,
                       profile: { display_name: "Alice" },
+                      ...(url.searchParams.get("user") === "U00000007"
+                        ? loginUser
+                        : {}),
                     },
                   });
                 assert.equal(url.pathname, "/api/chat.postMessage");
@@ -162,14 +215,12 @@ for (const variant of ["beer", "coffee"] as const)
         const ordinary = (await (
           await call("/api/sessions", undefined, { variant })
         ).json()) as CreatedSession;
-        assert.equal(
-          (await call("/api/slack-sessions", undefined, { variant })).status,
-          404,
-        );
-        assert.equal(
-          (await call("/api/slack-sessions", randomHex(), { variant })).status,
-          404,
-        );
+        // Start links are gone: every bearer variant of the old endpoint is closed.
+        for (const cap of [undefined, randomHex()])
+          assert.equal(
+            (await call("/api/slack-sessions", cap, { variant })).status,
+            404,
+          );
         assert.equal(
           (
             await call("/api/command", ordinary.hostCapability, {
@@ -181,14 +232,6 @@ for (const variant of ["beer", "coffee"] as const)
           ).status,
           403,
         );
-        assert.equal(
-          (
-            await call("/api/slack-sessions", invite, {
-              variant: variant === "coffee" ? "beer" : "coffee",
-            })
-          ).status,
-          404,
-        );
         for (const invalid of [
           { variant: "tea" },
           { variant: null },
@@ -198,11 +241,83 @@ for (const variant of ["beer", "coffee"] as const)
             (await call("/api/sessions", undefined, invalid)).status,
             400,
           );
-        const createdResponse = await call("/api/slack-sessions", invite, {
-          variant,
-        });
-        assert.equal(createdResponse.status, 201);
-        const created = (await createdResponse.json()) as CreatedSession;
+        const prefix = variant === "coffee" ? "coffee-" : "";
+        const navigate = (path: string, cookie?: string) =>
+          mf.dispatchFetch(`http://localhost${path}`, {
+            redirect: "manual",
+            headers: cookie ? { Cookie: cookie } : {},
+          });
+        const login = async () => {
+          const begin = await navigate(`/auth/slack/${variant}`);
+          assert.equal(begin.status, 303);
+          assert.equal(begin.headers.get("referrer-policy"), "no-referrer");
+          const authorize = new URL(begin.headers.get("location")!);
+          assert.equal(authorize.searchParams.get("client_id"), clientId);
+          nonce = authorize.searchParams.get("nonce")!;
+          return {
+            state: authorize.searchParams.get("state")!,
+            cookie: begin.headers.get("set-cookie")!.split(";")[0],
+          };
+        };
+        const failure = async (
+          response: Response,
+          reason: string,
+          page = `${prefix}slack`,
+        ) => {
+          assert.equal(response.status, 303);
+          assert.equal(
+            response.headers.get("location"),
+            `http://127.0.0.1:5173/#/${page}/${reason}`,
+          );
+          assert.match(response.headers.get("set-cookie")!, /Max-Age=0/);
+        };
+        // Forged callbacks: no cookie (variant unknown), or a state from another browser.
+        const other = await login();
+        await failure(
+          await navigate(
+            `/auth/slack/callback?code=synthetic-code&state=${other.state}`,
+          ),
+          "expired",
+          "slack",
+        );
+        await failure(
+          await navigate(
+            `/auth/slack/callback?code=synthetic-code&state=${randomHex()}`,
+            other.cookie,
+          ),
+          "expired",
+        );
+        // Guests cannot start a Slack session.
+        loginUser = { is_restricted: true };
+        const guest = await login();
+        await failure(
+          await navigate(
+            `/auth/slack/callback?code=synthetic-code&state=${guest.state}`,
+            guest.cookie,
+          ),
+          "forbidden",
+        );
+        loginUser = {};
+        const member = await login();
+        const createdResponse = await navigate(
+          `/auth/slack/callback?code=synthetic-code&state=${member.state}`,
+          member.cookie,
+        );
+        assert.equal(createdResponse.status, 303);
+        assert.equal(
+          createdResponse.headers.get("referrer-policy"),
+          "no-referrer",
+        );
+        assert.match(createdResponse.headers.get("set-cookie")!, /Max-Age=0/);
+        const landing =
+          /^http:\/\/127\.0\.0\.1:5173\/#\/host\/([a-f0-9]{32}\.[a-f0-9]{64})\/([a-z]+(?:-[a-z]+){12})$/.exec(
+            createdResponse.headers.get("location")!,
+          );
+        assert.ok(landing);
+        const created = {
+          hostCapability: landing[1],
+          spectatorCapability: landing[2],
+        };
         const host = created.hostCapability,
           viewer = created.spectatorCapability;
         const socketResponse = await mf.dispatchFetch(
@@ -228,7 +343,10 @@ for (const variant of ["beer", "coffee"] as const)
         ) as unknown as {
           runCompletion(): Promise<void>;
           revokeGrant(): Promise<void>;
-          legacyExpiry(): Promise<void>;
+          shortExpiry(): Promise<void>;
+          ceiling(ms: number): Promise<void>;
+          legacyGrant(hash: string): Promise<void>;
+          loginGrant(): Promise<void>;
           unlockImport(): Promise<void>;
           unlockRetry(): Promise<void>;
           crashRecovery(): Promise<void>;
@@ -292,7 +410,9 @@ for (const variant of ["beer", "coffee"] as const)
           "U00000001",
           "1234567890.123456",
           credential,
-          hash,
+          clientSecret,
+          "U00000007",
+          "synthetic-user-credential",
         ])
           assert.ok(!hostText.includes(secret));
         assert.equal(viewerState.slack, undefined);
@@ -347,8 +467,9 @@ for (const variant of ["beer", "coffee"] as const)
           state.participants.find((p) => p.name === "Alice")!.id,
           stableId,
         );
-        // Existing unexpired sessions can extend past their old expiry after grant revalidation.
-        await stub.legacyExpiry();
+        // Unexpired login sessions can extend past their 24-hour expiry up to their fixed ceiling.
+        await stub.shortExpiry();
+        await stub.ceiling(3 * 24 * 3600000);
         const later = Date.now() + 2 * 24 * 3600000;
         assert.equal(
           (
@@ -378,6 +499,27 @@ for (const variant of ["beer", "coffee"] as const)
           Date.parse((await snapshot(host)).expiresAt),
           later + 3600000,
         );
+        // Sessions started with a legacy start link keep validating that grant.
+        await stub.legacyGrant(legacyHash);
+        assert.equal(
+          (
+            await command({
+              type: "setScheduledDraw",
+              startAt: new Date(Date.now() + 2.5 * 24 * 3600000).toISOString(),
+            })
+          ).status,
+          200,
+        );
+        assert.equal(
+          (
+            await command({
+              type: "setScheduledDraw",
+              startAt: new Date(Date.now() + 4 * 24 * 3600000).toISOString(),
+            })
+          ).status,
+          400,
+        );
+        await stub.loginGrant();
         assert.equal(
           (await command({ type: "setScheduledDraw", startAt: null })).status,
           200,

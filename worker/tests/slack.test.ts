@@ -7,7 +7,7 @@ import {
 } from "../slack/source";
 import { reconcile, queueResult, resultBody, postResult } from "../slack/state";
 import { newSession, mutate, advance, publicSession } from "../session";
-import { authorizeStart, slackAllowed } from "../slack/access";
+import { LOGIN_GRANT, slackAllowed, slackCeiling } from "../slack/access";
 import { randomHex, hashSecret } from "../auth";
 const link = "https://synthetic.slack.com/archives/C00000001/p1234567890123456";
 const source = parseSlackPermalink(link);
@@ -238,23 +238,50 @@ test("refresh retains opaque IDs and manual additions, distinguishes equal names
     ["Alice"],
   );
 });
-test("start grants require secret and bot, expire and rotate; public sessions get no Slack rights", async () => {
-  const token = randomHex(),
-    hash = await hashSecret(token);
+test("login sessions need bot and login secrets; legacy grants still expire and rotate; public sessions get no Slack rights", async () => {
+  const login = {
+    SLACK_BOT_TOKEN: "synthetic",
+    SLACK_CLIENT_ID: "1000000000.2000000000",
+    SLACK_CLIENT_SECRET: "synthetic-client-secret",
+  };
+  assert.equal(slackAllowed(LOGIN_GRANT, login), true);
+  for (const missing of [
+    "SLACK_BOT_TOKEN",
+    "SLACK_CLIENT_ID",
+    "SLACK_CLIENT_SECRET",
+  ])
+    assert.equal(
+      slackAllowed(LOGIN_GRANT, { ...login, [missing]: undefined }),
+      false,
+    );
+  assert.equal(
+    slackAllowed(LOGIN_GRANT, { ...login, SLACK_CLIENT_ID: "bad" }),
+    false,
+  );
+  assert.equal(
+    slackCeiling({ grantHash: LOGIN_GRANT, grantExpiresAt: 1234 }, login),
+    1234,
+  );
+  assert.equal(
+    slackCeiling(
+      { grantHash: LOGIN_GRANT, grantExpiresAt: 1234 },
+      { ...login, SLACK_CLIENT_SECRET: undefined },
+    ),
+    undefined,
+  );
+  const hash = await hashSecret(randomHex());
   const env = {
     SLACK_BOT_TOKEN: "synthetic",
     SLACK_START_GRANT: JSON.stringify({ hash, expiresAt: Date.now() + 10000 }),
   };
-  assert.ok(await authorizeStart(`Bearer ${token}`, env));
-  assert.equal(await authorizeStart(`Bearer ${randomHex()}`, env), undefined);
-  assert.equal(
-    await authorizeStart(`Bearer ${token}`, {
-      ...env,
-      SLACK_BOT_TOKEN: undefined,
-    }),
-    undefined,
-  );
+  assert.equal(slackAllowed(hash, env), true);
+  assert.equal(slackAllowed(LOGIN_GRANT, env), false);
+  assert.ok(slackCeiling({ grantHash: hash }, env));
   assert.equal(slackAllowed(undefined, env), false);
+  assert.equal(
+    slackAllowed(hash, { ...env, SLACK_BOT_TOKEN: undefined }),
+    false,
+  );
   assert.equal(
     slackAllowed(hash, {
       ...env,
