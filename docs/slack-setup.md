@@ -42,7 +42,7 @@ Beperkingen: Enterprise Grid met meerdere workspaces wordt niet ondersteund (wor
 
 ### Oude privé-startlinks
 
-Startlinks kunnen geen nieuwe sessies meer starten en het provisioningscript is verwijderd. Sessies die vóór deze wijziging met een startlink zijn gestart, blijven hun grant (`SLACK_START_GRANT`/`COFFEE_SLACK_START_GRANT`) controleren tot die verloopt. Daarna, of als je die sessies niet meer nodig hebt, verwijder je het secret met `npx wrangler secret delete SLACK_START_GRANT --env=""` en de lokale map `.private-slack/`. De resterende legacycode in `worker/slack/access.ts` kan dan worden verwijderd.
+Startlinks worden niet meer ondersteund. Sessies die ooit met een startlink zijn gestart, werken nog handmatig maar hebben geen Slack-rechten meer. De Worker leest `SLACK_START_GRANT`/`COFFEE_SLACK_START_GRANT` niet meer; verwijder ze met `npx wrangler secret delete SLACK_START_GRANT --env=""` (en eventueel `COFFEE_SLACK_START_GRANT`), en verwijder de lokale map `.private-slack/` als je die nog hebt.
 
 ## Gebruik
 

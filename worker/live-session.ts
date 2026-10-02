@@ -234,8 +234,6 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
         );
         if (ceiling === undefined)
           throw new RequestError(403, "schedule_access_expires");
-        // Also resolves the ceiling for existing sessions created before this field existed.
-        record.slack.grantExpiresAt = ceiling;
       }
       if (command !== null) {
         mutate(
