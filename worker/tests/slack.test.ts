@@ -65,7 +65,7 @@ test("strict permalink parser normalizes thread parents and rejects SSRF/ambiguo
   ])
     assert.throws(() => parseSlackPermalink(value), SlackError);
 });
-test("complete reactors are deduplicated; humans/guests retained, bots/deleted filtered, safe name fallback", async () => {
+test("complete reactors are deduplicated; humans/guests/external users retained, bots/deleted filtered, safe name fallback", async () => {
   const users = [
     "U00000001",
     "U00000002",
@@ -74,6 +74,8 @@ test("complete reactors are deduplicated; humans/guests retained, bots/deleted f
     "U00000005",
     "U00000006",
     "U00000007",
+    "U00000008",
+    "U00000009",
     "USLACKBOT",
   ];
   const calls: string[] = [];
@@ -101,6 +103,13 @@ test("complete reactors are deduplicated; humans/guests retained, bots/deleted f
       person(users[4], "gone", { deleted: true }),
       person(users[5], "", { profile: { email: "never@example.invalid" } }),
       person(users[6], "app", { is_app_user: true }),
+      // Reduced Slack Connect object for an external user.
+      { id: users[7], team_id: "T00000002", is_stranger: true },
+      {
+        id: users[8],
+        is_stranger: true,
+        profile: { real_name: "Extern" },
+      },
     ];
     return success({ user: profiles.find((p) => p.id === id) });
   });
@@ -109,10 +118,10 @@ test("complete reactors are deduplicated; humans/guests retained, bots/deleted f
   );
   assert.deepEqual(
     people.map((p) => p.name),
-    ["Alice", "Alice", "Bob", "Deelnemer"],
+    ["Alice", "Alice", "Bob", "Deelnemer", "Deelnemer", "Extern"],
   );
-  assert.equal(calls.length, 7);
-  assert.equal(new Set(calls).size, 7);
+  assert.equal(calls.length, 9);
+  assert.equal(new Set(calls).size, 9);
   assert.ok(!JSON.stringify(people).includes("email"));
 });
 test("missing reaction is empty; incomplete or malformed Slack data fails atomically", async () => {
@@ -140,6 +149,24 @@ test("missing reaction is empty; incomplete or malformed Slack data fails atomic
       client(() => success({ user: {} })),
     ).getParticipants(source),
   );
+  const malformed = (user: object) =>
+    new SlackReactionParticipantSource(
+      client((url) =>
+        url.pathname.endsWith("reactions.get")
+          ? success({
+              type: "message",
+              channel: source.channelId,
+              message: {
+                ts: source.parentMessageTs,
+                reactions: [{ name: "beers", count: 1, users: ["U00000001"] }],
+              },
+            })
+          : success({ user: { id: "U00000001", ...user } }),
+      ),
+    ).getParticipants(source);
+  await assert.rejects(malformed({ deleted: "no" }));
+  await assert.rejects(malformed({ is_bot: 0 }));
+  await assert.rejects(malformed({ profile: [] }));
 });
 test("Slack errors and Retry-After are sanitized; no immediate retries or token leakage", async () => {
   let calls = 0;

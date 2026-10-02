@@ -140,15 +140,20 @@ export class SlackReactionParticipantSource {
               controller.signal,
             );
             const user = object(response.user);
+            // External Slack Connect users ("strangers") arrive as a reduced
+            // object without deleted/is_bot/profile; absent flags mean false.
+            const flag = (value: unknown) =>
+              value === undefined || typeof value === "boolean";
             if (
               user.id !== id ||
-              typeof user.deleted !== "boolean" ||
-              typeof user.is_bot !== "boolean"
+              !flag(user.deleted) ||
+              !flag(user.is_bot) ||
+              !flag(user.is_app_user)
             )
               throw new SlackError("slack_response");
-            if (user.deleted || user.is_bot || user.is_app_user === true)
-              continue;
-            const profile = object(user.profile);
+            if (user.deleted || user.is_bot || user.is_app_user) continue;
+            const profile =
+              user.profile === undefined ? {} : object(user.profile);
             const name =
               displayName(profile.display_name) ??
               displayName(profile.real_name) ??

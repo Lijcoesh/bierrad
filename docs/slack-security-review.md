@@ -96,3 +96,7 @@ For Slack scheduling, the server rechecks the current variant-specific grant has
 Tests cover the explicit 24-hour default, later/earlier replanning, no resurrection, the exact grant ceiling including the extra hour, atomic rejection, legacy-session extension through the real Worker, viewer expiry updates, and the original disabled-button scenario. No real participant data or capability links are used in fixtures.
 
 Retention validation: 53 tests pass (34 frontend/controller, 19 Worker/Slack); both typechecks and both production builds pass. Long-lived browser expiry timers are chunked below the platform timeout limit and tested offline. No configured linting or dependency changes. Changed-file and frontend-bundle checks found no credentials, capability links, private server fields or unsafe VITE configuration.
+
+## External Slack Connect reactors (2026-10-02)
+
+Reviewed against SECURITY.md; it remains unchanged. Slack may return a reduced `users.info` object for external Slack Connect users. Previously the missing `deleted`/`is_bot`/`profile` fields made the whole import fail with `slack_response`. Absent flags now mean false; present flags must still be booleans, the returned ID must still match exactly and a present profile must still be an object. Names keep the existing normalization and `Deelnemer` fallback; no new scopes, API methods, fields, storage or logging. Synthetic tests cover reduced external objects and malformed flags.
