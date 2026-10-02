@@ -6,6 +6,7 @@ import {
   executeScheduledDraw,
   nextDeadline,
   publicSession,
+  START_DELAY_MS,
 } from "../session";
 
 const now = Date.parse("2026-10-02T12:00:00Z");
@@ -38,7 +39,7 @@ test("schedule is host-only, strictly validated, temporary and cancellable", () 
   assert.throws(() => mutate(r, "spectator", command(at), now));
   assert.throws(() => mutate(r, "host", { ...command(at), repeat: true }, now));
   mutate(r, "host", command(at), now);
-  assert.equal(nextDeadline(r), now + 58000);
+  assert.equal(nextDeadline(r), now + 60000 - START_DELAY_MS);
   assert.deepEqual(publicSession(r).scheduledDraw, {
     startAt: at,
     status: "pending",
@@ -71,7 +72,7 @@ test("automatic start uses the common draw operation exactly once and queues the
       now,
     ),
   );
-  executeScheduledDraw(r, now + 58000, true);
+  executeScheduledDraw(r, now + 60000 - START_DELAY_MS, true);
   const draw = structuredClone(r.session.activeDraw);
   assert.ok(draw);
   assert.equal(r.session.state, "countdown");

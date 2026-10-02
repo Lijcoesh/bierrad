@@ -1,5 +1,5 @@
 import type { BeerWheelSession, DrawInstruction, Participant } from "./models";
-import { landingRotation } from "./spin";
+import { idleRotation, landingRotation } from "./spin";
 import { validateParticipants } from "../utils/participants";
 import { selectRiggedWinners, type DrawRig } from "../utils/random";
 
@@ -33,6 +33,13 @@ export function wheelParticipants(
   const byId = new Map(session.participants.map((p) => [p.id, p]));
   return session.activeDraw.participantIds.map((id) => byId.get(id)!);
 }
+/** Empty setup shows a placeholder instead of an unbounded saved preference. */
+export function wheelCount(session: BeerWheelSession): number {
+  return (
+    session.activeDraw?.spins.length ??
+    (session.participants.length ? session.winnerCount : 1)
+  );
+}
 export function sessionWinners(
   session: BeerWheelSession,
 ): readonly Participant[] {
@@ -62,7 +69,8 @@ export function startDraw(
   const spins = winners.map((winner, wheelIndex) => {
     const rotations = 6 + (wheelIndex % 2);
     const startRotation =
-      session.activeDraw?.spins[wheelIndex]?.targetRotation ?? 0;
+      session.activeDraw?.spins[wheelIndex]?.targetRotation ??
+      idleRotation(wheelIndex, participantIds.length);
     return {
       id: `${timing.id}:${wheelIndex}`,
       wheelIndex,

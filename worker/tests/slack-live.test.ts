@@ -11,7 +11,7 @@ import type {
 for (const variant of ["beer", "coffee"] as const)
   test(
     `${variant} Slack Worker: private starts, authorization, DTO privacy, refresh, disconnected completion and durable idempotency`,
-    { timeout: 45000 },
+    { timeout: 50000 },
     async () => {
       const reaction = variant === "coffee" ? "coffee" : "beers";
       const credential = `synthetic-${variant}-credential`;
@@ -385,14 +385,14 @@ for (const variant of ["beer", "coffee"] as const)
         const readsBeforeStart = readCalls;
         const start = await command({
           type: "setScheduledDraw",
-          startAt: new Date(Date.now() + 3000).toISOString(),
+          startAt: new Date(Date.now() + 5000).toISOString(),
         });
         assert.equal(start.status, 200);
         // Change reactors after the last import. Only the final server check can see this.
         users = ["U00000003"];
         assert.equal(posts, 0);
         // No browser, socket, polling, or completion callback: only durable alarm runs.
-        await new Promise((resolve) => setTimeout(resolve, 11000));
+        await new Promise((resolve) => setTimeout(resolve, 13000));
         assert.equal(readCalls, readsBeforeStart + 1);
         state = await snapshot(host);
         assert.equal(state.scheduledDraw, undefined);
@@ -440,7 +440,7 @@ for (const variant of ["beer", "coffee"] as const)
         // A definite rejection is retryable, once; ambiguous delivery never is.
         mode = "reject";
         assert.equal((await command({ type: "startDraw" })).status, 200);
-        await new Promise((resolve) => setTimeout(resolve, 8500));
+        await new Promise((resolve) => setTimeout(resolve, 10500));
         state = await snapshot(host);
         assert.equal(state.state, "finished");
         assert.equal(state.slack?.result?.status, "failed");
@@ -463,7 +463,7 @@ for (const variant of ["beer", "coffee"] as const)
           (
             await command({
               type: "setScheduledDraw",
-              startAt: new Date(Date.now() + 3000).toISOString(),
+              startAt: new Date(Date.now() + 5000).toISOString(),
             })
           ).status,
           200,
@@ -480,7 +480,7 @@ for (const variant of ["beer", "coffee"] as const)
           (
             await command({
               type: "setScheduledDraw",
-              startAt: new Date(Date.now() + 3000).toISOString(),
+              startAt: new Date(Date.now() + 5000).toISOString(),
             })
           ).status,
           200,

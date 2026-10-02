@@ -1,14 +1,11 @@
 import { useTheme } from "../Theme";
 import type { BeerWheelSession } from "../domain/models";
-import { wheelParticipants } from "../domain/drawEngine";
+import { wheelCount, wheelParticipants } from "../domain/drawEngine";
 import { BeerWheel } from "./BeerWheel";
 export function WheelGrid({ session }: { session: BeerWheelSession }) {
   const theme = useTheme();
   const people = wheelParticipants(session);
-  // Empty setup shows a placeholder instead of an unbounded saved preference.
-  const count =
-    session.activeDraw?.spins.length ??
-    (people.length ? session.winnerCount : 1);
+  const count = wheelCount(session);
   return (
     <div className="wheel-grid" data-count={count}>
       {Array.from({ length: count }, (_, i) => {
@@ -29,6 +26,7 @@ export function WheelGrid({ session }: { session: BeerWheelSession }) {
             <BeerWheel
               people={people}
               spin={spin}
+              wheelIndex={i}
               spinning={session.state === "spinning" && !winner}
             />
             <div

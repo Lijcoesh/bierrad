@@ -35,7 +35,7 @@ export function nextFridayInput(now: number): string {
   const day = new Date(amsterdamInput(now).slice(0, 10) + "T00:00:00Z");
   day.setUTCDate(day.getUTCDate() + ((5 - day.getUTCDay() + 7) % 7));
   let value = day.toISOString().slice(0, 10) + "T15:45";
-  if (parseAmsterdamInput(value) <= now + 2000) {
+  if (parseAmsterdamInput(value) <= now + 4000) {
     day.setUTCDate(day.getUTCDate() + 7);
     value = day.toISOString().slice(0, 10) + "T15:45";
   }

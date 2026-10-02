@@ -1,6 +1,7 @@
 import { useTheme } from "../Theme";
 import type { Participant, SpinInstruction } from "../domain/models";
 import { useWheelAnimation } from "../hooks/useWheelAnimation";
+import { idleRotation } from "../domain/spin";
 export const colors = [
   "#f8bd37",
   "#eb794e",
@@ -15,10 +16,12 @@ export function BeerWheel({
   people,
   spin,
   spinning,
+  wheelIndex = 0,
 }: {
   people: readonly Participant[];
   spin?: SpinInstruction;
   spinning: boolean;
+  wheelIndex?: number;
 }) {
   const theme = useTheme();
   const palette =
@@ -34,10 +37,14 @@ export function BeerWheel({
           "#e6baab",
         ]
       : colors;
-  const ref = useWheelAnimation(spin);
   const displayed = people.length
     ? people
     : Array.from({ length: 8 }, (_, i) => ({ id: String(i), name: "" }));
+  // Matches the first spin's startRotation, so the wheel never jumps when it starts.
+  const ref = useWheelAnimation(
+    spin,
+    idleRotation(wheelIndex, displayed.length),
+  );
   const step = 360 / displayed.length;
   const point = (angle: number, radius = 194) => [
     210 + radius * Math.sin((angle * Math.PI) / 180),

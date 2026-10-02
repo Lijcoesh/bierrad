@@ -16,6 +16,8 @@ export const themes = {
     brigade: "bierbrigade",
     footer: "Met liefde gebrouwen voor de vrijdagmiddag.",
     finale: "DE BIERBRIGADE VAN DEZE WEEK",
+    resultOne: "mag deze week het bier halen.",
+    resultMany: "halen deze week het bier.",
   },
   coffee: {
     name: "Koffierad",
@@ -30,6 +32,8 @@ export const themes = {
     brigade: "koffiebrigade",
     footer: "Met liefde gemaakt voor de koffiepauze.",
     finale: "DE KOFFIEBRIGADE VAN DEZE RONDE",
+    resultOne: "mag de volgende koffie halen.",
+    resultMany: "halen de volgende koffie.",
   },
 } as const;
 export function localHash(variant: WheelVariant): string {
