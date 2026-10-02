@@ -62,12 +62,12 @@ test("capabilities use 256 secure random bits and hashes; DTO is explicitly mini
   assert.equal(parseCapability("sequential-1"), null);
 });
 
-test("spectator word links carry 130 random bits from a fixed 1024-word list", async () => {
+test("spectator word links carry 50 random bits from a fixed 1024-word list", async () => {
   assert.equal(SPECTATOR_WORDS.length, 1024);
   assert.equal(new Set(SPECTATOR_WORDS).size, 1024);
   assert.ok(SPECTATOR_WORDS.every((w) => /^[a-z]{3,6}$/.test(w)));
   const words = randomWords();
-  assert.match(words, /^[a-z]+(?:-[a-z]+){12}$/);
+  assert.match(words, /^[a-z]+(?:-[a-z]+){4}$/);
   assert.notEqual(words, randomWords());
   const parsed = parseCapability(words);
   assert.deepEqual(parsed, { locator: null, secret: words });
@@ -82,8 +82,11 @@ test("spectator word links carry 130 random bits from a fixed 1024-word list", a
     ["bierrad", ...list.slice(1)].join("-"),
     list.join("_"),
     words.toUpperCase(),
+    randomWords(12),
   ])
     assert.equal(parseCapability(invalid), null);
+  const legacy = randomWords(13);
+  assert.deepEqual(parseCapability(legacy), { locator: null, secret: legacy });
 });
 
 test("server domain validates inputs, locks draws, advances by time and allows independent repeats", () => {
@@ -218,7 +221,7 @@ test(
       );
       const created = (await createdResponse.json()) as CreatedSession;
       assert.notEqual(created.hostCapability, created.spectatorCapability);
-      assert.match(created.spectatorCapability, /^[a-z]+(?:-[a-z]+){12}$/);
+      assert.match(created.spectatorCapability, /^[a-z]+(?:-[a-z]+){4}$/);
       assert.equal(
         parseCapability(created.hostCapability)!.locator,
         await wordLocator(created.spectatorCapability),

@@ -1,4 +1,4 @@
-/** 1024 (2^10) unique, short Dutch words; spectator links chain 13 of them (130 bits). */
+/** 1024 (2^10) unique, short Dutch words; spectator links chain 5 of them (50 bits). */
 export const SPECTATOR_WORDS: readonly string[] = `
 aalbes aap aard acht acteur adem ader adres afval agenda agent akelei akker
 alarm album alk alpaca alpen amber amulet ananas anijs anker appel april
