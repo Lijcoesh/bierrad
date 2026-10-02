@@ -1,5 +1,10 @@
 import type { WheelVariant } from "../shared/variant";
-import { queueResult, type SlackState } from "./slack/state";
+import {
+  queueResult,
+  REMINDER_LEAD_MS,
+  REMINDER_MIN_LEAD_MS,
+  type SlackState,
+} from "./slack/state";
 import {
   createSession,
   startDraw,
@@ -153,6 +158,12 @@ export function nextDeadline(record: StoredSession): number {
   if (slack?.job?.status === "pending") times.push(slack.job.readyAt);
   if (slack?.job?.status === "posting")
     times.push(slack.job.attemptedAt! + 120000);
+  const reminder = slack?.reminder;
+  if (reminder?.status === "pending") times.push(reminder.readyAt);
+  if (reminder?.status === "posting")
+    times.push(reminder.attemptedAt! + 120000);
+  if (reminder?.status === "failed" && reminder.capability && reminder.retryAt)
+    times.push(reminder.retryAt);
   if (draw && s.state === "countdown") times.push(Date.parse(draw.startAt));
   if (draw && ["countdown", "spinning"].includes(s.state))
     times.push(
@@ -162,11 +173,20 @@ export function nextDeadline(record: StoredSession): number {
     );
   return Math.min(...times);
 }
+/** Drops any reminder, and with it the stored raw spectator capability. */
+function clearReminder(record: StoredSession) {
+  if (record.slack) delete record.slack.reminder;
+}
+/**
+ * `verifiedSpectator` is the command's spectator capability only after the
+ * caller has matched its hash to the stored spectator hash; otherwise absent.
+ */
 export function mutate(
   record: StoredSession,
   role: ClientRole,
   input: unknown,
   now: number,
+  verifiedSpectator?: string,
 ): void {
   if (now >= record.expiresAt) throw new RequestError(404, "unavailable");
   if (role !== "host") throw new RequestError(403, "forbidden");
@@ -183,7 +203,7 @@ export function mutate(
   const allowed: Record<string, string[]> = {
     setParticipants: ["names"],
     setWinnerCount: ["count"],
-    setScheduledDraw: ["startAt"],
+    setScheduledDraw: ["startAt", "spectatorCapability"],
     startDraw: [],
     reset: [],
     endSession: [],
@@ -280,9 +300,17 @@ export function mutate(
       break;
     case "setScheduledDraw": {
       require(caps.canManageParticipants);
+      const notify = command.spectatorCapability;
       if (command.startAt === null) {
+        if (notify !== undefined) throw new RequestError(400, "invalid");
         delete record.scheduledDraw;
+        clearReminder(record);
         break;
+      }
+      if (notify !== undefined) {
+        if (typeof notify !== "string" || notify !== verifiedSpectator)
+          throw new RequestError(403, "forbidden");
+        if (!record.slack?.source) throw new RequestError(409, "slack_link");
       }
       const at =
         typeof command.startAt === "string" ? Date.parse(command.startAt) : NaN;
@@ -304,6 +332,17 @@ export function mutate(
         startAt: command.startAt as string,
         status: "pending",
       };
+      clearReminder(record);
+      // Too close to the start to be useful: plan the draw without a reminder.
+      if (notify !== undefined && at - now >= REMINDER_MIN_LEAD_MS)
+        record.slack!.reminder = {
+          id: crypto.randomUUID(),
+          startAt: command.startAt as string,
+          readyAt: Math.max(now, at - REMINDER_LEAD_MS),
+          capability: notify as string,
+          status: "pending",
+          attempts: 0,
+        };
       break;
     }
     case "startDraw":
@@ -320,11 +359,13 @@ export function mutate(
       if (record.slack) delete record.slack.job;
       queueResult(record);
       delete record.scheduledDraw;
+      clearReminder(record);
       record.draws++;
       break;
     case "reset":
       require(caps.canReset);
       delete record.scheduledDraw;
+      clearReminder(record);
       record.session = createSession(
         record.session.id,
         record.session.participants,
@@ -337,6 +378,7 @@ export function mutate(
       delete record.slack.source;
       delete record.slack.syncedAt;
       delete record.slack.count;
+      clearReminder(record);
       // Keep private identities so a later import replaces these participants.
       // Clearing the source above still disables Slack posting in manual mode.
       break;

@@ -29,6 +29,7 @@ export interface RemoteOptions {
   apiUrl: string;
   capability: string;
   role: ClientRole;
+  spectatorCapability?: string;
   fetch?: typeof fetch;
   socket?: (url: string, protocols: string[]) => WebSocket;
 }
@@ -391,8 +392,19 @@ export class RemoteSessionController implements SessionController {
   setWinnerCount(count: number) {
     return this.command({ type: "setWinnerCount", count });
   }
-  setScheduledDraw(startAt: string | null) {
-    return this.command({ type: "setScheduledDraw", startAt });
+  get canShareSpectatorLink() {
+    return this.options.role === "host" && !!this.options.spectatorCapability;
+  }
+  setScheduledDraw(startAt: string | null, shareSpectatorLink = false) {
+    return this.command({
+      type: "setScheduledDraw",
+      startAt,
+      ...(startAt !== null &&
+      shareSpectatorLink &&
+      this.options.spectatorCapability
+        ? { spectatorCapability: this.options.spectatorCapability }
+        : {}),
+    });
   }
   startDraw() {
     return this.command({ type: "startDraw" });

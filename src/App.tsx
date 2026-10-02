@@ -247,11 +247,19 @@ export default function App({ controller }: { controller: SessionController }) {
                 <ScheduleControls
                   plan={live.scheduledDraw}
                   expiresAt={live.expiresAt}
+                  slack={
+                    live.slack?.enabled && live.slack.source === "slack"
+                      ? {
+                          canShare: !!controller.canShareSpectatorLink,
+                          reminder: live.slack.reminder,
+                        }
+                      : undefined
+                  }
                   locked={
                     !capabilities.canManageParticipants || pending || slackBusy
                   }
                   clockOffsetMs={clockOffsetMs}
-                  onSave={(at) => controller.setScheduledDraw!(at)}
+                  onSave={(at, share) => controller.setScheduledDraw!(at, share)}
                 />
               )}
             <div className="how-it-works">

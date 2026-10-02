@@ -32,7 +32,13 @@ export interface SessionController {
   /** Remote sessions ignore the rig: the server alone picks winners. */
   startDraw(rig?: import("../utils/random").DrawRig): Promise<void>;
   reset(): Promise<void>;
-  setScheduledDraw?(startAt: string | null): Promise<void>;
+  /** `shareSpectatorLink` posts the spectator link to the Slack thread before the start. */
+  setScheduledDraw?(
+    startAt: string | null,
+    shareSpectatorLink?: boolean,
+  ): Promise<void>;
+  /** Host routes carrying the spectator link can share it via Slack. */
+  readonly canShareSpectatorLink?: boolean;
   importSlack?(permalink?: string): Promise<void>;
   useManualSource?(): Promise<void>;
   retrySlackResult?(): Promise<void>;

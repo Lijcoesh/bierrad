@@ -119,7 +119,7 @@ Een capability bestaat uit een willekeurige 128-bit locator plus een onafhankeli
 | `POST /api/command` | Geldige host | Strikt getypeerd commando met actuele revisie |
 | `GET /api/socket` upgrade | Geldige host of kijker | Snapshotupdates; alleen pingberichten toegestaan |
 
-HTTP gebruikt `Authorization: Bearer <capability>`. Browsers bieden bij WebSocket-upgrade `bierrad, auth.<capability>` als subprotocol aan; de server selecteert alleen `bierrad`. Geen capabilities in backend-URLs of querystrings. Commando's: `setParticipants` (namen, server maakt IDs), `setWinnerCount`, `setScheduledDraw` (ISO-tijd of null om te annuleren), `startDraw`, `reset`, `endSession`. De client kan nooit officiële winnaars/instructies aanleveren. Backendrechten zijn bepalend; frontendcapabilities zijn alleen UX.
+HTTP gebruikt `Authorization: Bearer <capability>`. Browsers bieden bij WebSocket-upgrade `bierrad, auth.<capability>` als subprotocol aan; de server selecteert alleen `bierrad`. Geen capabilities in backend-URLs of querystrings. Commando's: `setParticipants` (namen, server maakt IDs), `setWinnerCount`, `setScheduledDraw` (ISO-tijd of null om te annuleren, optioneel met `spectatorCapability` om de kijklink vooraf in de Slack-thread te laten plaatsen), `startDraw`, `reset`, `endSession`. De client kan nooit officiële winnaars/instructies aanleveren. Backendrechten zijn bepalend; frontendcapabilities zijn alleen UX.
 
 Ongeldige/verlopen toegang retourneert dezelfde generieke unavailable-respons. Afloop wist namen/uitslag uit de UI, ook met een offline deadline. Bestaande sockets sluiten. De host kan de hele sessie onmiddellijk intrekken door haar te beëindigen.
 
@@ -152,7 +152,7 @@ Tijdelijke toegang is niet hetzelfde als gebruikersauthenticatie. Links kunnen i
 
 ## Later
 
-Wekelijks herhalende planning en automatische kanaaloproepen zijn niet geïmplementeerd. Er is geen permanente medewerkerhistorie.
+Wekelijks herhalende planning en automatische kanaaloproepen zijn niet geïmplementeerd; alleen de optionele kijklink-herinnering in de bestaande thread. Er is geen permanente medewerkerhistorie.
 
 
 ## Automatisch verversen en starten
@@ -160,6 +160,8 @@ Wekelijks herhalende planning en automatische kanaaloproepen zijn niet geïmplem
 Na Slack-import kun je **Automatisch verversen · elke 5 minuten** aanvinken. Dit werkt zolang dit hostscherm openstaat; sluiten of herladen zet de schakelaar uit. Het pauzeert bij verbroken verbinding, tijdens een import/trekking en vanaf twee minuten voor een geplande start. Handmatige toevoegingen blijven behouden.
 
 Een live-host kan onder **Automatisch starten** een datum en tijd kiezen, standaard de eerstvolgende vrijdag om **15.45 Nederlandse tijd (Europe/Amsterdam)**. Zet de start expliciet aan; uitzetten annuleert de planning. Dit is één trekking, geen wekelijkse herhaling. Je kunt tot 30 dagen vooruit plannen. Een nog geldige sessie wordt zo nodig verlengd tot één uur na de start; een eerdere planning verkort de bestaande geldigheid niet. De Slack-toegang moet tot die tijd geldig zijn. Een verlopen sessie kan niet worden heropend. Annuleren of handmatig draaien draait een toegekende verlenging niet terug. De planning blijft bij herladen behouden en de server start ook zonder open hostscherm. Handmatig draaien of resetten annuleert de planning.
+
+Bij een Slack-sessie staat bij het plannen **Stuur 2 minuten vooraf de kijklink in de Slack-thread** standaard aan. De server plaatst dan twee minuten voor de start (of meteen, als de start dichterbij ligt maar nog minstens 30 seconden weg is) een kort bericht met de kijklink in de oorspronkelijke thread, zodat collega's op tijd kunnen meekijken. Iedereen die die thread kan lezen kan daarna tot het einde van de sessie meekijken. Dit werkt alleen vanuit de volledige hostlink, omdat alleen die de kijklink bevat. De server controleert de link tegen de opgeslagen hash, bouwt de URL zelf op uit `FRONTEND_URL` en bewaart de ruwe kijklink alleen tot het bericht is geplaatst of de planning verandert.
 
 Vlak vóór de automatische trekking controleert de server de Slack-reacties nogmaals, ook als de vijfminutenrefresh uitstaat. Daarna kiest dezelfde server-drawoperatie de winnaars en publiceert de normale threaduitslag. De laatste controle kan de daadwerkelijke start iets vertragen. Bij ophaalfouten, verlopen Slack-toegang, een lege lijst, een bezette sessie of meer dan een minuut te late alarmbezorging wordt de start overgeslagen; de host kan opnieuw plannen. Er wordt niet stilzwijgend met een oude lijst gedraaid. Bij een crash tijdens de eindcontrole vervalt de poging uiterlijk na twee minuten. Standalone blijft handmatig werken.
 

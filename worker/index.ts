@@ -15,7 +15,7 @@ import {
   parseLoginCookie,
 } from "./slack/login";
 import { randomHex, parseCapability, hashSecret } from "./auth";
-import { json, readBody, redirect } from "./http";
+import { frontend, json, readBody, redirect } from "./http";
 import { RequestError } from "./session";
 export { LiveSession } from "./live-session";
 
@@ -49,22 +49,6 @@ async function creationAllowed(env: WorkerEnv, ip: string) {
     (await env.CREATION_LIMIT.limit({ key: ip })).success &&
     (await env.CREATION_GLOBAL.limit({ key: "creation" })).success
   );
-}
-function frontend(env: WorkerEnv): URL | undefined {
-  try {
-    const url = new URL(env.FRONTEND_URL);
-    if (
-      url.search ||
-      url.hash ||
-      url.username ||
-      url.password ||
-      !env.ALLOWED_ORIGINS.split(",").includes(url.origin)
-    )
-      return;
-    return url;
-  } catch {
-    return;
-  }
 }
 /**
  * Top-level browser navigations for Sign in with Slack. These carry no Origin
@@ -203,6 +187,16 @@ export default {
           } else {
             const command =
               url.pathname === "/api/command" ? await readBody(request) : null;
+            // An offered spectator link must open this same session.
+            if (
+              command &&
+              typeof command === "object" &&
+              "spectatorCapability" in command &&
+              (typeof command.spectatorCapability !== "string" ||
+                parseCapability(command.spectatorCapability)?.locator !==
+                  capability.locator)
+            )
+              throw new RequestError(400, "invalid");
             response = await stub.access(capability.secret, command);
           }
         } else throw new RequestError(404, "unavailable");
