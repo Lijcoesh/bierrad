@@ -110,7 +110,7 @@ Alarms bepalen server-side countdown, individuele onthullingen, finale en expiry
 
 Productie vereist HTTPS/WSS. De frontendlinks gebruiken `#/host/<host>/<spectator>` en `#/live/<spectator>`, zodat statische Pages-routing werkt en de fragmenten niet naar GitHub worden gestuurd. Beide toegangscodes worden alleen bij creatie geretourneerd; de host kan na verversen opnieuw de kijklink kopiëren uit zijn eigen fragment. Er staat nooit een naam in een link.
 
-Een capability bestaat uit een willekeurige 128-bit locator plus een onafhankelijke 256-bit secret. De locator is geen autorisatie of intern sessie-ID. De server bewaart SHA-256-hashes van beide secrets en vergelijkt timing-safe. Geen permanente directory of aparte database/KV-index is nodig.
+Een hostcapability bestaat uit een willekeurige 128-bit locator plus een onafhankelijke 256-bit secret. De locator is geen autorisatie of intern sessie-ID. Een kijklink gebruikt 13 aan elkaar gekoppelde woorden uit een vaste lijst van 1024 korte Nederlandse woorden (130 willekeurige bits), bijvoorbeeld `#/live/kaas-molen-tulp-…`, zodat je hem makkelijker overtypt of voorleest. De server leidt de locator daarvan eenrichtings af (SHA-256 met eigen domeinprefix). Oudere hexadecimale kijklinks blijven werken tot hun sessie afloopt. De server bewaart SHA-256-hashes van beide secrets en vergelijkt timing-safe. Geen permanente directory of aparte database/KV-index is nodig.
 
 | Operatie | Toegang | Gedrag |
 | --- | --- | --- |

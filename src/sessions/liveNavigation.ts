@@ -6,10 +6,11 @@ export function parseLiveRoute(
   capability: string;
   spectatorCapability?: string;
 } | null {
-  const match =
-    /^#\/(host|live)\/([a-f0-9]{32}\.[a-f0-9]{64})(?:\/([a-f0-9]{32}\.[a-f0-9]{64}))?$/.exec(
-      hash,
-    );
+  // Hex `locator.secret`, or (new spectator links) 13 chained words.
+  const cap = String.raw`[a-f0-9]{32}\.[a-f0-9]{64}|[a-z]{2,8}(?:-[a-z]{2,8}){12}`;
+  const match = new RegExp(`^#/(host|live)/(${cap})(?:/(${cap}))?$`).exec(
+    hash,
+  );
   return match
     ? {
         role: match[1] === "host" ? "host" : "spectator",

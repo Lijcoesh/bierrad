@@ -14,20 +14,38 @@ import {
   LoginError,
   parseLoginCookie,
 } from "./slack/login";
-import { randomHex, parseCapability, hashSecret } from "./auth";
+import {
+  randomHex,
+  randomWords,
+  parseCapability,
+  capabilityLocator,
+  hashSecret,
+  wordLocator,
+} from "./auth";
 import { frontend, json, readBody, redirect } from "./http";
 import { RequestError } from "./session";
 export { LiveSession } from "./live-session";
 
 type WorkerEnv = Env & SlackSecrets;
+/** Whether an offered capability opens the same session as the caller's. */
+async function sameSession(
+  offered: unknown,
+  own: { locator: string | null; secret: string },
+): Promise<boolean> {
+  const parsed = typeof offered === "string" ? parseCapability(offered) : null;
+  return (
+    !!parsed &&
+    (await capabilityLocator(parsed)) === (await capabilityLocator(own))
+  );
+}
 async function createSession(
   env: WorkerEnv,
   variant: WheelVariant,
   grant?: { hash: string; expiresAt: number },
 ): Promise<CreatedSession> {
-  const locator = randomHex(16),
-    host = randomHex(),
-    spectator = randomHex();
+  const spectator = randomWords(),
+    locator = await wordLocator(spectator),
+    host = randomHex();
   const [hostHash, spectatorHash] = await Promise.all([
     hashSecret(host),
     hashSecret(spectator),
@@ -40,7 +58,7 @@ async function createSession(
   );
   return {
     hostCapability: `${locator}.${host}`,
-    spectatorCapability: `${locator}.${spectator}`,
+    spectatorCapability: spectator,
     expiresAt,
   };
 }
@@ -176,7 +194,9 @@ export default {
               null);
           const capability = parseCapability(raw);
           if (!capability) throw new RequestError(404, "unavailable");
-          const stub = env.SESSIONS.getByName(capability.locator);
+          const stub = env.SESSIONS.getByName(
+            await capabilityLocator(capability),
+          );
           if (socket) {
             if (
               request.headers.get("Upgrade")?.toLowerCase() !== "websocket" ||
@@ -192,9 +212,7 @@ export default {
               command &&
               typeof command === "object" &&
               "spectatorCapability" in command &&
-              (typeof command.spectatorCapability !== "string" ||
-                parseCapability(command.spectatorCapability)?.locator !==
-                  capability.locator)
+              !(await sameSession(command.spectatorCapability, capability))
             )
               throw new RequestError(400, "invalid");
             response = await stub.access(capability.secret, command);

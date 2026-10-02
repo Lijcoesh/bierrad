@@ -192,6 +192,14 @@ test("invalid access clears state, fragment routes separate host and viewer acce
     parseLiveRoute(`#/host/${capability}/${capability}`)?.spectatorCapability,
     capability,
   );
+  const words = "bier-rad-tulp-kaas-molen-fiets-klomp-haring-dijk-polder-gracht-kade-zon";
+  assert.equal(parseLiveRoute(`#/live/${words}`)?.capability, words);
+  assert.equal(
+    parseLiveRoute(`#/host/${capability}/${words}`)?.spectatorCapability,
+    words,
+  );
+  assert.equal(parseLiveRoute(`#/live/${words}-extra`), null);
+  assert.equal(parseLiveRoute(`#/live/Bier-${words.slice(5)}`), null);
 });
 
 test("offline client clears participant data at its server-adjusted expiration", async () => {

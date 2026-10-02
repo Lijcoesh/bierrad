@@ -271,16 +271,16 @@ test(
       );
       const hosted = await snapshot(host);
       assert.equal(hosted.slack?.reminder?.status, "posted");
-      assert.ok(!JSON.stringify(hosted).includes(viewer.split(".")[1]));
+      assert.ok(!JSON.stringify(hosted).includes(viewer));
       assert.equal((await snapshot(viewer)).slack, undefined);
       // The raw link is gone from storage once settled.
-      assert.ok(!(await stub.stored()).includes(viewer.split(".")[1]));
+      assert.ok(!(await stub.stored()).includes(viewer));
       // A definite rejection is retried at most once, then wiped.
       mode = "reject";
       assert.equal((await plan(viewer, 5 * 60000)).status, 200);
       const pending = await snapshot(host);
       assert.equal(pending.slack?.reminder?.status, "pending");
-      assert.ok((await stub.stored()).includes(viewer.split(".")[1]));
+      assert.ok((await stub.stored()).includes(viewer));
       assert.equal(sent.length, 1);
       assert.equal((await plan(viewer, 90000)).status, 200);
       await wait(1500);
@@ -290,7 +290,7 @@ test(
       // Cancelling clears the retry and the stored link.
       assert.equal((await command({ type: "setScheduledDraw", startAt: null })).status, 200);
       assert.equal((await snapshot(host)).slack?.reminder, undefined);
-      assert.ok(!(await stub.stored()).includes(viewer.split(".")[1]));
+      assert.ok(!(await stub.stored()).includes(viewer));
     } finally {
       await mf.dispose();
     }
