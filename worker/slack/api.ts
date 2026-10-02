@@ -20,28 +20,40 @@ export class SlackApiClient {
     private fetcher: typeof fetch = globalThis.fetch.bind(globalThis),
   ) {}
   async call(
-    method: "reactions.get" | "users.info" | "chat.postMessage",
+    method:
+      | "reactions.get"
+      | "users.info"
+      | "chat.postMessage"
+      | "auth.test"
+      | "auth.revoke"
+      | "openid.connect.token",
     body: SlackObject,
     signal?: AbortSignal,
   ): Promise<SlackObject> {
     const posting = method === "chat.postMessage";
+    // Client credentials travel in a form body, never in a URL or header.
+    const form = method === "openid.connect.token";
     try {
-      const query = posting
-        ? ""
-        : "?" +
-          new URLSearchParams(
-            Object.entries(body).map(([k, v]) => [k, String(v)]),
-          );
+      const params = new URLSearchParams(
+        Object.entries(body).map(([k, v]) => [k, String(v)]),
+      );
+      const query = posting || form ? "" : "?" + params;
       const response = await this.fetcher(
         `https://slack.com/api/${method}${query}`,
         {
-          method: posting ? "POST" : "GET",
+          method: posting || form ? "POST" : "GET",
           redirect: "manual",
-          headers: {
-            Authorization: `Bearer ${this.token}`,
-            "Content-Type": "application/json; charset=utf-8",
-          },
-          ...(posting ? { body: JSON.stringify(body) } : {}),
+          headers: form
+            ? { "Content-Type": "application/x-www-form-urlencoded" }
+            : {
+                Authorization: `Bearer ${this.token}`,
+                "Content-Type": "application/json; charset=utf-8",
+              },
+          ...(posting
+            ? { body: JSON.stringify(body) }
+            : form
+              ? { body: params.toString() }
+              : {}),
           signal: signal ?? AbortSignal.timeout(10000),
         },
       );

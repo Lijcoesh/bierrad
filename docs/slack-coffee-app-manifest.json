@@ -11,7 +11,13 @@
     }
   },
   "oauth_config": {
+    "redirect_urls": [
+      "https://bierrad-live.timzegveld.workers.dev/auth/slack/callback"
+    ],
     "scopes": {
+      "user": [
+        "openid"
+      ],
       "bot": [
         "reactions:read",
         "users:read",

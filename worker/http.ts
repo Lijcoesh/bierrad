@@ -41,3 +41,18 @@ export async function readBody(request: Request): Promise<unknown> {
     reader.releaseLock();
   }
 }
+/** Browser navigation redirect; never leaks the callback URL as a referrer. */
+export function redirect(location: string, cookie: string): Response {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: location,
+      "Set-Cookie": cookie,
+      "Cache-Control": "no-store, private",
+      "Referrer-Policy": "no-referrer",
+      "X-Robots-Tag": "noindex, nofollow, noarchive",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    },
+  });
+}
