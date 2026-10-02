@@ -2,7 +2,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
-import { randomHex, hashSecret, parseCapability } from "../auth";
+import {
+  randomHex,
+  randomWords,
+  hashSecret,
+  parseCapability,
+  capabilityLocator,
+  wordLocator,
+} from "../auth";
+import { SPECTATOR_WORDS } from "../words";
 import {
   newSession,
   mutate,
@@ -51,6 +59,30 @@ test("capabilities use 256 secure random bits and hashes; DTO is explicitly mini
   assert.ok(!JSON.stringify(dto).includes(record.hostHash));
   assert.ok(!JSON.stringify(dto).includes(record.session.id));
   assert.equal(parseCapability("sequential-1"), null);
+});
+
+test("spectator word links carry 130 random bits from a fixed 1024-word list", async () => {
+  assert.equal(SPECTATOR_WORDS.length, 1024);
+  assert.equal(new Set(SPECTATOR_WORDS).size, 1024);
+  assert.ok(SPECTATOR_WORDS.every((w) => /^[a-z]{3,6}$/.test(w)));
+  const words = randomWords();
+  assert.match(words, /^[a-z]+(?:-[a-z]+){12}$/);
+  assert.notEqual(words, randomWords());
+  const parsed = parseCapability(words);
+  assert.deepEqual(parsed, { locator: null, secret: words });
+  const locator = await capabilityLocator(parsed!);
+  assert.match(locator, /^[a-f0-9]{32}$/);
+  assert.equal(locator, await wordLocator(words));
+  assert.notEqual(locator, (await hashSecret(words)).slice(0, 32));
+  const list = words.split("-");
+  for (const invalid of [
+    list.slice(1).join("-"),
+    [...list, list[0]].join("-"),
+    ["bierrad", ...list.slice(1)].join("-"),
+    list.join("_"),
+    words.toUpperCase(),
+  ])
+    assert.equal(parseCapability(invalid), null);
 });
 
 test("server domain validates inputs, locks draws, advances by time and allows independent repeats", () => {
@@ -185,6 +217,11 @@ test(
       );
       const created = (await createdResponse.json()) as CreatedSession;
       assert.notEqual(created.hostCapability, created.spectatorCapability);
+      assert.match(created.spectatorCapability, /^[a-z]+(?:-[a-z]+){12}$/);
+      assert.equal(
+        parseCapability(created.hostCapability)!.locator,
+        await wordLocator(created.spectatorCapability),
+      );
       for (const path of [
         "/api/sessions",
         "/api/participants",

@@ -4,7 +4,14 @@ import {
   slackEnvironment,
   type SlackSecrets,
 } from "./slack/access";
-import { randomHex, parseCapability, hashSecret } from "./auth";
+import {
+  randomHex,
+  randomWords,
+  parseCapability,
+  capabilityLocator,
+  hashSecret,
+  wordLocator,
+} from "./auth";
 import { json, readBody } from "./http";
 import { RequestError } from "./session";
 export { LiveSession } from "./live-session";
@@ -64,9 +71,9 @@ export default {
               : undefined;
           if (url.pathname === "/api/slack-sessions" && !grant)
             throw new RequestError(404, "unavailable");
-          const locator = randomHex(16),
-            host = randomHex(),
-            spectator = randomHex();
+          const spectator = randomWords(),
+            locator = await wordLocator(spectator),
+            host = randomHex();
           const [hostHash, spectatorHash] = await Promise.all([
             hashSecret(host),
             hashSecret(spectator),
@@ -80,7 +87,7 @@ export default {
           response = json(
             {
               hostCapability: `${locator}.${host}`,
-              spectatorCapability: `${locator}.${spectator}`,
+              spectatorCapability: spectator,
               expiresAt,
             },
             201,
@@ -106,7 +113,9 @@ export default {
               null);
           const capability = parseCapability(raw);
           if (!capability) throw new RequestError(404, "unavailable");
-          const stub = env.SESSIONS.getByName(capability.locator);
+          const stub = env.SESSIONS.getByName(
+            await capabilityLocator(capability),
+          );
           if (socket) {
             if (
               request.headers.get("Upgrade")?.toLowerCase() !== "websocket" ||
