@@ -11,6 +11,7 @@ import { ParticipantManager } from "./components/ParticipantManager";
 import { FinalResult } from "./components/FinalResult";
 import { Confetti } from "./components/Confetti";
 import { SecretPanel } from "./components/SecretPanel";
+import { SpectatorView } from "./components/SpectatorView";
 import { useBeerWheel } from "./hooks/useBeerWheel";
 import type { SessionController } from "./sessions/SessionController";
 import { sessionWinners } from "./domain/drawEngine";
@@ -57,6 +58,15 @@ export default function App({ controller }: { controller: SessionController }) {
         <p>De link is verlopen of niet beschikbaar.</p>
         <a href={localHash(theme.variant)}>Terug naar je eigen {theme.name}</a>
       </div>
+    );
+  if (live?.role === "spectator")
+    return (
+      <SpectatorView
+        session={session}
+        live={live}
+        clockOffsetMs={clockOffsetMs}
+        notice={notice}
+      />
     );
   return (
     <div className="app">

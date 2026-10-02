@@ -491,7 +491,7 @@ Een host beheert handmatig de deelnemers, kiest het aantal bierhalers, start all
 
 De server beheert de sessie, selecteert alle unieke winnaars en verstuurt één autoritatieve `DrawInstruction` naar alle schermen. Deze bevat de volledige segmentvolgorde, één gezamenlijke starttijd en meerdere `SpinInstruction`s met per rad een winnaar, duur en rotatie. Een instructie met vijf spins levert op het hostscherm, iedere spectator en de kantoor-tv dezelfde vijf raderen en dezelfde uitslag op. Clients visualiseren de uitslag; ze bepalen in Live Mode nooit zelfstandig een winnaar of volgende sessietoestand.
 
-Een Cloudflare Worker met een Durable Object per sessie beheert livegegevens en WebSocket-verbindingen. De zelfstandige lokale versie werkt zonder backend. De server stuurt een trekking twee seconden voor de start uit; schermen corrigeren hun klok op basis van de server.
+Een Cloudflare Worker met een Durable Object per sessie beheert livegegevens en WebSocket-verbindingen. De zelfstandige lokale versie werkt zonder backend. De server stuurt een trekking vier seconden voor de start uit, zodat alle schermen samen aftellen; schermen corrigeren hun klok op basis van de server.
 
 ## Geplande vrijdagtrekkingen
 

@@ -10,6 +10,7 @@ import {
   publicSession,
   TTL_MS,
   nextDeadline,
+  START_DELAY_MS,
 } from "../session";
 import type {
   CreatedSession,
@@ -80,8 +81,8 @@ test("server domain validates inputs, locks draws, advances by time and allows i
   const draw = r.session.activeDraw!;
   assert.equal(draw.spins.length, 3);
   assert.equal(new Set(draw.spins.map((s) => s.winnerId)).size, 3);
-  assert.equal(Date.parse(draw.startAt), now + 2000);
-  assert.equal(nextDeadline(r), now + 2000);
+  assert.equal(Date.parse(draw.startAt), now + START_DELAY_MS);
+  assert.equal(nextDeadline(r), now + START_DELAY_MS);
   assert.equal(r.session.state, "countdown");
   for (const spin of draw.spins) {
     assert.equal(spin.startAt, draw.startAt);
@@ -94,16 +95,16 @@ test("server domain validates inputs, locks draws, advances by time and allows i
   assert.throws(() => command({ type: "setParticipants", names: [] }));
   advance(r, now + 5000);
   assert.equal(r.session.state, "spinning");
-  advance(r, now + 8000);
+  advance(r, now + 10000);
   assert.equal(r.session.state, "finished");
   assert.equal(r.session.winnerIds.length, 3);
-  command({ type: "startDraw" }, now + 9000);
+  command({ type: "startDraw" }, now + 11000);
   assert.deepEqual(
     new Set(r.session.activeDraw!.spins.map((s) => s.winnerId)),
     new Set(draw.spins.map((s) => s.winnerId)),
   );
-  advance(r, now + 17000);
-  command({ type: "reset" }, now + 17000);
+  advance(r, now + 21000);
+  command({ type: "reset" }, now + 21000);
   assert.equal(r.session.activeDraw, undefined);
   assert.deepEqual(r.session.winnerIds, []);
   assert.throws(() => command({ type: "startDraw" }, now + TTL_MS));
@@ -318,7 +319,7 @@ test(
         assert.deepEqual(message.session.activeDraw, draw);
         assert.ok(!JSON.stringify(message).includes(created.hostCapability));
       }
-      await new Promise((r) => setTimeout(r, 3000));
+      await new Promise((r) => setTimeout(r, START_DELAY_MS + 1000));
       const late = await connect(created.spectatorCapability);
       await waitFor(() =>
         late.messages.some(

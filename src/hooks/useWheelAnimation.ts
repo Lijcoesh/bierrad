@@ -3,14 +3,14 @@ import type { SpinInstruction } from "../domain/models";
 import { getSpinTiming } from "../domain/spin";
 import { PlaybackClock } from "./PlaybackClock";
 /** Playback only: finishing or skipping an animation never changes session state. */
-export function useWheelAnimation(spin?: SpinInstruction) {
+export function useWheelAnimation(spin?: SpinInstruction, restRotation = 0) {
   const offset = useContext(PlaybackClock);
   const ref = useRef<SVGSVGElement>(null);
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
     if (!spin) {
-      element.style.transform = "rotate(0deg)";
+      element.style.transform = `rotate(${restRotation}deg)`;
       return;
     }
     const timing = getSpinTiming(spin, Date.now() + offset);
@@ -47,6 +47,6 @@ export function useWheelAnimation(spin?: SpinInstruction) {
     // Seek along the original easing curve rather than restarting a shortened animation.
     animation.currentTime = timing.elapsedMs;
     return () => animation.cancel();
-  }, [spin, offset]);
+  }, [spin, offset, restRotation]);
   return ref;
 }

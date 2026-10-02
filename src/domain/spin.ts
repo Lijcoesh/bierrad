@@ -8,6 +8,16 @@ export function landingRotation(
   const target = (360 - ((index + 0.5) * 360) / count) % 360;
   return current + 360 * rotations + ((target - (current % 360) + 360) % 360);
 }
+/**
+ * Deterministic resting position per wheel, so multiple wheels never look cloned.
+ * Purely visual: it only seeds the first spin's start, never the winner or probability.
+ */
+export function idleRotation(wheelIndex: number, count: number): number {
+  if (count < 1) return 0;
+  // Golden-ratio spacing spreads the centred slice evenly for any wheel count.
+  const slice = Math.floor(wheelIndex * count * 0.618) % count;
+  return (360 - ((slice + 0.5) * 360) / count) % 360;
+}
 /** Absolute-time playback works before start, during a spin, and after its deadline. */
 export function getSpinTiming(spin: SpinInstruction, now: number) {
   const start = Date.parse(spin.startAt);

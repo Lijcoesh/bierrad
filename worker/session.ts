@@ -16,7 +16,8 @@ import {
   MAX_SCHEDULE_AHEAD_MS,
 } from "../shared/retention";
 export const TTL_MS = DEFAULT_SESSION_TTL_MS;
-export const START_DELAY_MS = 2000;
+// Long enough for every screen to show a synchronized 3-2-1 before the wheels move.
+export const START_DELAY_MS = 4000;
 export class RequestError extends Error {
   constructor(
     public status: number,

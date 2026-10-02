@@ -10,6 +10,8 @@ Wie haalt deze week het bier? Voeg deelnemers toe, kies het aantal bierhalers en
 
 **Start live Bierrad** maakt een nieuwe, lege tijdelijke sessie. Je wordt host, voert deelnemers in en deelt **Kopieer kijklink** met collega's of de kantoor-tv. Iedereen ziet dezelfde deelnemers, raderen en uitslag. Kijkers kunnen niets aanpassen. De host kan deelnemers beheren, aantal kiezen, draaien, resetten en de sessie beëindigen. Live deelnemers worden niet naar browseropslag gekopieerd. De knop verschijnt alleen als een geldige publieke API-URL is geconfigureerd.
 
+De kijklink opent een presentatiescherm voor monitor of kantoor-tv: zo groot mogelijke raderen, een inklapbare deelnemerslijst, een gezamenlijke 3-2-1 op de starttijd van de server, per rad de winnaar zodra dat rad stopt en daarna de gezamenlijke uitslag tot de host reset. Het scherm leidt alles af uit de serverstand; wie later instapt of herlaadt, ziet direct de juiste fase.
+
 Een nieuwe sessie verloopt standaard na 24 uur (of eerder als de Slack-toegang verloopt). Een latere automatische start verlengt een nog geldige sessie zo nodig tot één uur na die start. **Live beëindigen** wist de sessie eerder en laat beide links vervallen. Bewaar je hostlink voor jezelf: iedereen met die link kan de sessie bedienen. Deel alleen de kijklink. Deelbare toegang is geen volledige gebruikersauthenticatie.
 
 De standaard aantalvoorkeur is 2, minimum 1 en maximum de deelnemerslijst. Bij verkleinen van de lijst wordt het effectieve aantal veilig begrensd. Elke bierhaler krijgt een eigen rad met dezelfde volledige pool. Eén gezamenlijke selectie bepaalt vooraf unieke winnaars. De raderen stoppen kort na elkaar; na de laatste volgt de finale. **Opnieuw draaien** kiest opnieuw uit de volledige pool; **Deelnemers aanpassen** wist alleen de trekking. Bediening is tijdens countdown/draaien vergrendeld.
@@ -100,7 +102,7 @@ De sessiestaten zijn `setup`, `ready`, `countdown`, `spinning`, `finished`. Geen
 
 ### Timing en late kijkers
 
-Lokaal is de aanloop 100 ms; live kiest de server `startAt = now + 2000 ms`. De controller schat het klokverschil via de servertimestamp en het midden van een HTTP/ping-roundtrip, met voorkeur voor de laagste gemeten latency per verbinding. Alle raderen rekenen met diezelfde correctie. Een lopende animatie wordt op de verstreken tijd in de oorspronkelijke easingcurve hervat; een voltooide instructie toont direct de eindstand.
+Lokaal is de aanloop 100 ms; live kiest de server `startAt = now + 4000 ms`, zodat elk scherm een gelijklopende 3-2-1 kan tonen. De controller schat het klokverschil via de servertimestamp en het midden van een HTTP/ping-roundtrip, met voorkeur voor de laagste gemeten latency per verbinding. Alle raderen rekenen met diezelfde correctie. Een lopende animatie wordt op de verstreken tijd in de oorspronkelijke easingcurve hervat; een voltooide instructie toont direct de eindstand.
 
 Alarms bepalen server-side countdown, individuele onthullingen, finale en expiry. Een vertraagde alarmdelivery wordt bij volgende toegang ingehaald. De host hoeft niet verbonden te blijven. Na reconnect komt opnieuw een geautoriseerde volledige snapshot. Revisies verhinderen dat een oud HTTP-antwoord een nieuwere WebSocket-stand overschrijft of dat twee hosts stilzwijgend elkaars edits verliezen. Dit is visuele kantoorsynchronisatie; netwerklatency en achtergrondtab-throttling kunnen zichtbare verschillen geven.
 

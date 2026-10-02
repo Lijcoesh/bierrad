@@ -143,6 +143,8 @@ function LiveBar({
       setPending(false);
     }
   }
+  // Spectators get their own presentation header inside SpectatorView.
+  if (live?.role === "spectator") return null;
   return (
     <div className="live-bar">
       <span>
