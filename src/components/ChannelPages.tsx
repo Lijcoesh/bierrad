@@ -14,6 +14,8 @@ import {
   type ChannelBindFailure,
 } from "../sessions/ChannelClient";
 import { configuredApiUrl } from "../sessions/liveNavigation";
+import { RemoteSessionController } from "../sessions/RemoteSessionController";
+import App from "../App";
 
 const clock = new Intl.DateTimeFormat("nl-NL", {
   timeZone: "Europe/Amsterdam",
@@ -136,7 +138,8 @@ export function ChannelWheelPage({
         if ((error as { code?: string }).code === "unavailable") setGone(true);
       });
     refresh();
-    const timer = setInterval(refresh, 20000);
+    // Picks up rounds started elsewhere (for example with /koffierad).
+    const timer = setInterval(refresh, 10000);
     window.addEventListener("focus", refresh);
     return () => {
       active = false;
@@ -149,10 +152,6 @@ export function ChannelWheelPage({
     setNotice("");
     try {
       const result = await run(command);
-      if (command.type === "requestRound" && result?.type === "status") {
-        const round = result.status.round;
-        if (round) location.hash = `/live/${round.spectatorCapability}`;
-      }
       if (result?.type === "rotated")
         location.replace(
           `#/koffie-beheer/${capability}/${result.requestCapability}`,
@@ -170,7 +169,7 @@ export function ChannelWheelPage({
         <h1>☕ Dit Koffierad is niet beschikbaar.</h1>
         <p>
           {gone
-            ? "De koppeling is opgeheven of deze link is vervangen. Vraag de beheerder van het kanaal om een nieuwe aanvraaglink."
+            ? "De koppeling is opgeheven of deze link is vervangen. Vraag de beheerder van het kanaal om de nieuwe link."
             : "Live koffierondes zijn hier nog niet ingesteld."}
         </p>
         <a href="#/coffee">Open een lokaal Koffierad</a>
@@ -186,67 +185,132 @@ export function ChannelWheelPage({
   const choices = [
     ...new Set([...ROUND_MINUTE_CHOICES, status.defaultMinutes]),
   ].sort((a, b) => a - b);
+  const request = () => void act({ type: "requestRound", minutes: chosen });
+  const admin = status.role === "admin" && (
+    <ChannelAdmin
+      status={status}
+      requestCapability={requestCapability}
+      pending={pending}
+      act={act}
+      setNotice={setNotice}
+    />
+  );
+  // The fixed channel page: the latest round's live wheel, then the next request.
+  if (status.round)
+    return (
+      <>
+        <div className="channel-live">
+          <div className="channel-strip" aria-live="polite">
+            <strong>☕ Koffierad van dit kanaal</strong>
+            {status.round.active ? (
+              <span>
+                Koffieronde! Het rad draait om{" "}
+                {clock.format(Date.parse(status.round.startAt))}. Klik op ☕
+                onder de oproep in Slack om mee te doen.
+              </span>
+            ) : (
+              <span className="channel-strip-request">
+                <label>
+                  Nieuwe ronde over{" "}
+                  <select
+                    value={chosen}
+                    disabled={pending}
+                    onChange={(e) => setMinutes(Number(e.target.value))}
+                  >
+                    {choices.map((m) => (
+                      <option key={m} value={m}>
+                        {m} min
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="primary"
+                  disabled={pending || status.roundsLeft === 0}
+                  onClick={request}
+                >
+                  ☕ Vraag een koffieronde aan
+                </button>
+              </span>
+            )}
+            {notice && <small role="status">{notice}</small>}
+          </div>
+          <ChannelLive
+            key={status.round.spectatorCapability}
+            apiUrl={api}
+            capability={status.round.spectatorCapability}
+          />
+        </div>
+        {admin && <div className="unavailable channel-page">{admin}</div>}
+      </>
+    );
   return (
     <div className="unavailable channel-page">
-      <span className="friday-badge">☕ Koffierad · gekoppeld aan Slack</span>
+      <span className="friday-badge">☕ Koffierad van dit kanaal</span>
       <h1>Tijd voor koffie?</h1>
-      {status.round ? (
-        <section className="channel-round" aria-live="polite">
-          <p>
-            Er loopt een koffieronde. Het rad draait om{" "}
-            <strong>{clock.format(Date.parse(status.round.startAt))}</strong>.
-            Klik op ☕ onder de oproep in Slack om mee te doen.
-          </p>
-          <a className="primary" href={`#/live/${status.round.spectatorCapability}`}>
-            Kijk live mee ☕
-          </a>
-        </section>
-      ) : (
-        <section className="channel-request">
-          <p>
-            Er komt een oproep in het Slack-kanaal. Wie op ☕ klikt, doet mee. Na
-            de wachttijd draait het rad en kiest het één koffiehaler.
-          </p>
-          <fieldset className="minute-choices">
-            <legend>Het rad draait over</legend>
-            {choices.map((m) => (
-              <button
-                key={m}
-                type="button"
-                aria-pressed={m === chosen}
-                onClick={() => setMinutes(m)}
-              >
-                {m} min
-              </button>
-            ))}
-          </fieldset>
-          <button
-            className="primary spin-button"
-            disabled={pending || status.roundsLeft === 0}
-            onClick={() => void act({ type: "requestRound", minutes: chosen })}
-          >
-            ☕ VRAAG EEN KOFFIERONDE AAN
-          </button>
-          {status.roundsLeft === 0 && (
-            <p className="helper">Vandaag zijn er genoeg rondes geweest. Morgen weer!</p>
-          )}
-        </section>
-      )}
+      <section className="channel-request">
+        <p>
+          Er komt een oproep in het Slack-kanaal. Wie op ☕ klikt, doet mee. Na de
+          wachttijd draait het rad hier en kiest het één koffiehaler. Deze pagina
+          blijft altijd het rad van dit kanaal.
+        </p>
+        <fieldset className="minute-choices">
+          <legend>Het rad draait over</legend>
+          {choices.map((m) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={m === chosen}
+              onClick={() => setMinutes(m)}
+            >
+              {m} min
+            </button>
+          ))}
+        </fieldset>
+        <button
+          className="primary spin-button"
+          disabled={pending || status.roundsLeft === 0}
+          onClick={request}
+        >
+          ☕ VRAAG EEN KOFFIERONDE AAN
+        </button>
+        {status.roundsLeft === 0 && (
+          <p className="helper">Vandaag zijn er genoeg rondes geweest. Morgen weer!</p>
+        )}
+      </section>
       {notice && <p role="status">{notice}</p>}
       <p className="helper">
         Liever vanuit Slack? Typ <code>/koffierad</code> of{" "}
         <code>/koffierad 10</code> in het kanaal.
       </p>
-      {status.role === "admin" && (
-        <ChannelAdmin
-          status={status}
-          requestCapability={requestCapability}
-          pending={pending}
-          act={act}
-          setNotice={setNotice}
-        />
-      )}
+      {admin}
     </div>
+  );
+}
+
+/** The live wheel of one round, as a spectator; remounted for every new round. */
+function ChannelLive({
+  apiUrl,
+  capability,
+}: {
+  apiUrl: string;
+  capability: string;
+}) {
+  const [controller, setController] = useState<RemoteSessionController>();
+  useEffect(() => {
+    const current = new RemoteSessionController({
+      apiUrl,
+      capability,
+      role: "spectator",
+    });
+    setController(current);
+    void current.initialize();
+    return () => current.dispose();
+  }, [apiUrl, capability]);
+  return controller ? (
+    <App controller={controller} />
+  ) : (
+    <p className="notice">Het rad wordt klaargezet…</p>
   );
 }
 
@@ -267,7 +331,7 @@ function ChannelAdmin({
     <section className="channel-admin">
       <h2>Beheer</h2>
       <p className="helper">
-        Bewaar deze beheerpagina zelf; deel alleen de aanvraaglink. Een koppeling
+        Bewaar deze beheerpagina zelf; deel alleen de kanaallink (het vaste rad). Een koppeling
         verloopt na 90 dagen zonder koffierondes (nu tot{" "}
         {new Date(status.expiresAt).toLocaleDateString("nl-NL")}).
       </p>
@@ -278,13 +342,13 @@ function ChannelAdmin({
             void navigator.clipboard.writeText(channelLink(requestCapability)).then(
               () =>
                 setNotice(
-                  "Aanvraaglink gekopieerd. Iedereen met deze link kan een koffieronde starten en meekijken.",
+                  "Link gekopieerd. Iedereen met deze link kan meekijken en een koffieronde starten.",
                 ),
               () => setNotice("Kopiëren lukt niet. Sta klembordtoegang toe."),
             )
           }
         >
-          Kopieer aanvraaglink ⧉
+          Kopieer kanaallink ⧉
         </button>
       )}
       <label>
@@ -311,13 +375,13 @@ function ChannelAdmin({
         onClick={() => {
           if (
             window.confirm(
-              "Een nieuwe aanvraaglink maken? De oude link werkt dan niet meer, ook niet als hij in Slack staat.",
+              "Een nieuwe kanaallink maken? De oude link werkt dan niet meer, ook niet als hij in Slack staat.",
             )
           )
-            void act({ type: "rotateRequestLink" }, "Nieuwe aanvraaglink gemaakt.");
+            void act({ type: "rotateRequestLink" }, "Nieuwe kanaallink gemaakt.");
         }}
       >
-        Nieuwe aanvraaglink
+        Nieuwe kanaallink
       </button>
       <button
         disabled={pending}

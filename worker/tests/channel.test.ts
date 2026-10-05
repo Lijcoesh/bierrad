@@ -361,7 +361,9 @@ test(
         finishRound(): Promise<void>;
       };
       const stored = (await channel.stored())!;
-      for (const secret of [admin.split(".")[1], requester.split(".")[1], "U00000007"])
+      // The admin secret and the binder are never stored. The request link is
+      // (it is already public in the channel) so every call can link to it.
+      for (const secret of [admin.split(".")[1], "U00000007"])
         assert.ok(!stored.includes(secret));
 
       const initial = ((await status(requester)) as { status: Record<string, unknown> }).status;
@@ -380,14 +382,20 @@ test(
 
       // A round from the link: one call message, a prefilled ☕, a viewer-only session.
       const before = posts.length;
-      const started = (await status(requester, { type: "requestRound", minutes: 5 })) as { status: { round: { startAt: string; spectatorCapability: string } } };
+      const started = (await status(requester, { type: "requestRound", minutes: 5 })) as { status: { round: { startAt: string; spectatorCapability: string; active: boolean } } };
       const round = started.status.round;
       assert.ok(round);
       assert.equal(posts.length, before + 1);
       const call = posts.at(-1)!;
       assert.equal(call.channel, "C00000001");
       assert.equal(call.thread_ts, undefined);
-      assert.ok(JSON.stringify(call.blocks).includes(`#/live/${round.spectatorCapability}`));
+      // The call links to the fixed channel page, not to a per-round link.
+      assert.ok(JSON.stringify(call.blocks).includes(`"url":"http://127.0.0.1:5173/#/koffie/${requester}"`));
+      assert.ok(!JSON.stringify(call).includes(round.spectatorCapability));
+      assert.equal(round.active, true);
+      // No DTO ever returns the stored request link.
+      assert.ok(!JSON.stringify(started).includes(requester.split(".")[1]));
+      assert.ok(!JSON.stringify(await status(admin)).includes(requester.split(".")[1]));
       assert.equal(reactionsAdded.length, 1);
       assert.equal(reactionsAdded[0].name, "coffee");
       const callTs = reactionsAdded[0].timestamp as string;
@@ -440,14 +448,19 @@ test(
       assert.equal((await api(requester, { type: "requestRound", minutes: 2 })).status, 409);
       // Once it has stopped, a new round can start right away, well before the watch window ends.
       await session.land();
-      assert.equal(((await status(requester)) as { status: { round?: object } }).status.round, undefined);
-      const reply = (await (await slash({ text: "2" })).json()) as { text: string };
-      assert.match(reply.text, /Gelukt!/);
+      // The fixed page keeps showing the result, but the round no longer blocks.
+      const landed = ((await status(requester)) as { status: { round?: { active: boolean; spectatorCapability: string } } }).status.round;
+      assert.equal(landed?.active, false);
+      assert.equal(landed?.spectatorCapability, viewer);
+      // Success is silent: an empty 200 shows nothing; the call itself confirms.
+      const reply = await slash({ text: "2" });
+      assert.equal(reply.status, 200);
+      assert.equal(await reply.text(), "");
       assert.equal(posts.at(-1)!.channel, "C00000001");
       assert.equal(reactionsAdded.length, 2);
       // The new round replaced the old raw spectator link; after its window the next one is wiped too.
       assert.ok(!(await channel.stored())!.includes(viewer));
-      assert.ok(((await status(requester)) as { status: { round?: object } }).status.round);
+      assert.equal(((await status(requester)) as { status: { round?: { active: boolean } } }).status.round?.active, true);
       await channel.finishRound();
       assert.ok(!(await channel.stored())!.includes('"round"'));
       assert.equal(((await status(requester)) as { status: { round?: object } }).status.round, undefined);
@@ -465,6 +478,9 @@ test(
       const rotated = (await status(admin, { type: "rotateRequestLink" })) as { requestCapability: string };
       assert.equal((await api(requester)).status, 404);
       assert.equal(((await status(rotated.requestCapability)) as { status: { role: string } }).status.role, "requester");
+      // Later calls link to the new fixed page.
+      assert.ok((await channel.stored())!.includes(rotated.requestCapability));
+      assert.ok(!(await channel.stored())!.includes(requester));
       assert.deepEqual(await status(admin, { type: "unbind" }), { type: "unbound" });
       assert.equal((await api(admin)).status, 404);
       assert.equal((await api(rotated.requestCapability)).status, 404);

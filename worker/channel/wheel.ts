@@ -22,7 +22,7 @@ import {
   slackEnvironment,
   type SlackSecrets,
 } from "../slack/access";
-import { clock, postMessage } from "../slack/state";
+import { postMessage } from "../slack/state";
 import { boundBody, callBody } from "./messages";
 import { SLASH_HELP } from "./slash";
 
@@ -49,6 +49,12 @@ interface Binding {
   botUserId?: string;
   adminHash: string;
   requestHash: string;
+  /**
+   * Raw request capability, already posted in the channel itself. Kept so every
+   * call can link to the fixed channel page; never returned in any DTO.
+   * Absent on bindings made before the fixed link; they link per round instead.
+   */
+  requestCapability?: string;
   defaultMinutes: number;
   createdAt: number;
   /** Idle expiry, pushed back by binding and by every round. */
@@ -64,6 +70,7 @@ export interface BindInput {
   botUserId?: string;
   adminHash: string;
   requestHash: string;
+  requestCapability: string;
 }
 /**
  * One Durable Object per channel. The name is derived from the channel so
@@ -139,6 +146,7 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       ...(input.botUserId ? { botUserId: input.botUserId } : {}),
       adminHash: input.adminHash,
       requestHash: input.requestHash,
+      requestCapability: input.requestCapability,
       defaultMinutes: previous?.defaultMinutes ?? DEFAULT_ROUND_MINUTES,
       createdAt: now,
       expiresAt: now + CHANNEL_IDLE_TTL_MS,
@@ -168,7 +176,7 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
     now: number,
     settledId?: string,
   ): ChannelStatus {
-    const round = binding.round?.id === settledId ? undefined : binding.round;
+    const round = binding.round;
     const used = now - binding.window >= DAY_MS ? 0 : binding.rounds;
     return {
       role,
@@ -178,6 +186,8 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
             round: {
               startAt: new Date(round.startAt).toISOString(),
               spectatorCapability: round.spectatorCapability,
+              // A settled round stays visible (its result) but no longer blocks.
+              active: round.id !== settledId,
             },
           }
         : {}),
@@ -252,6 +262,7 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
           this.save(binding);
         } else {
           binding.requestHash = rotatedHash;
+          binding.requestCapability = `${binding.locator}.${rotated}`;
           this.save(binding);
           return json({
             type: "rotated",
@@ -273,8 +284,11 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       );
     }
   }
-  /** Called only after the Worker verified Slack's signature for this channel. */
-  async slash(minutes: number | undefined): Promise<string> {
+  /**
+   * Called only after the Worker verified Slack's signature for this channel.
+   * Resolves to an ephemeral reply, or null on success: the call is the confirmation.
+   */
+  async slash(minutes: number | undefined): Promise<string | null> {
     const app = frontend(this.env);
     const binding = this.read();
     if (!binding || Date.now() >= binding.expiresAt)
@@ -282,8 +296,8 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
     const chosen = minutes ?? binding.defaultMinutes;
     if (!validRoundMinutes(chosen)) return SLASH_HELP;
     try {
-      const round = await this.startRound(chosen);
-      return `☕ Gelukt! De oproep staat in het kanaal en het rad draait om ${clock.format(Date.parse(round.startAt))}.`;
+      await this.startRound(chosen);
+      return null;
     } catch (error) {
       return (
         (error instanceof RequestError && roundErrors[error.code]) ||
@@ -351,7 +365,10 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       binding.channelId,
       callBody(
         binding.channelId,
-        `${app.href}#/live/${spectator}`,
+        // The fixed channel page follows every round; older bindings link per round.
+        binding.requestCapability
+          ? `${app.href}#/koffie/${binding.requestCapability}`
+          : `${app.href}#/live/${spectator}`,
         startAt,
         Date.now(),
       ),
