@@ -1,8 +1,9 @@
+import { themes, wheelVariants, type SlackReaction } from "../../shared/variant";
 import { object, SlackApiClient, SlackError } from "./api";
 export interface SlackSource {
   channelId: string;
   parentMessageTs: string;
-  reactionName: "beers" | "coffee";
+  reactionName: SlackReaction;
 }
 const timestamp = /^\d{10}\.\d{6}$/;
 const channel = /^[CG][A-Z0-9]{8,20}$/;
@@ -86,7 +87,7 @@ export class SlackReactionParticipantSource {
     if (
       !channel.test(source.channelId) ||
       !timestamp.test(source.parentMessageTs) ||
-      !["beers", "coffee"].includes(source.reactionName)
+      !wheelVariants.some((v) => themes[v].reaction === source.reactionName)
     )
       throw new SlackError("slack_link");
     const controller = new AbortController();

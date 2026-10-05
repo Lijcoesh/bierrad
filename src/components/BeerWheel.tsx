@@ -24,19 +24,7 @@ export function BeerWheel({
   wheelIndex?: number;
 }) {
   const theme = useTheme();
-  const palette =
-    theme.variant === "coffee"
-      ? [
-          "#d7a575",
-          "#ebc9a6",
-          "#91aaa0",
-          "#f4dfbb",
-          "#b9a6bc",
-          "#caa58b",
-          "#bec9a7",
-          "#e6baab",
-        ]
-      : colors;
+  const palette = theme.wheelColors ?? colors;
   const displayed = people.length
     ? people
     : Array.from({ length: 8 }, (_, i) => ({ id: String(i), name: "" }));

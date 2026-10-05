@@ -82,3 +82,16 @@ test("coffee setup, finale and Slack controls consistently say coffee halen", as
   assert.doesNotMatch(slack, /:beers:|🍻/);
   controller.dispose();
 });
+test("local routes, reactions and Slack apps come from one theme table", async () => {
+  const { localHash, localVariant, reactionVariant, themes, wheelVariants } =
+    await import("../../shared/variant");
+  assert.equal(localVariant(""), "beer");
+  for (const variant of wheelVariants) {
+    assert.equal(localVariant(localHash(variant)), variant);
+    assert.equal(reactionVariant(themes[variant].reaction), variant);
+  }
+  for (const hash of ["#/slack", "#/live/x", "#/koffie-koppelen", "#/Coffee", "#/beer/"])
+    assert.equal(localVariant(hash), undefined, hash);
+  assert.equal(themes.beer.slackApp, "beer");
+  assert.equal(themes.coffee.slackApp, "coffee");
+});
