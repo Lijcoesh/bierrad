@@ -230,7 +230,7 @@ async function slashCommand(
       return ephemeral("☕ Even rustig aan. Probeer het over een minuut opnieuw.");
     const work = env.CHANNELS.getByName(
       await channelLocator(command.channelId),
-    ).slash(command.minutes);
+    ).slash(command.minutes, command.channelName);
     // Slack waits about three seconds; the round continues after we answer.
     ctx.waitUntil(work.catch(() => undefined));
     const reply = await Promise.race([

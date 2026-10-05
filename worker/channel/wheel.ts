@@ -24,7 +24,7 @@ import {
 } from "../slack/access";
 import { postMessage } from "../slack/state";
 import { boundBody, callBody } from "./messages";
-import { SLASH_HELP } from "./slash";
+import { SLASH_HELP, validChannelName } from "./slash";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** A round can be watched until this long after its start; it stops blocking once drawn. */
@@ -62,6 +62,8 @@ interface Binding {
    * on another screen. Absent on bindings made before it; rotation adds one.
    */
   viewerCapability?: string;
+  /** Last channel name Slack sent with a signed `/koffierad`; display only. */
+  channelName?: string;
   defaultMinutes: number;
   createdAt: number;
   /** Idle expiry, pushed back by binding and by every round. */
@@ -181,6 +183,7 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       requestCapability: input.requestCapability,
       viewerHash,
       viewerCapability: viewer,
+      ...(previous?.channelName ? { channelName: previous.channelName } : {}),
       defaultMinutes: previous?.defaultMinutes ?? DEFAULT_ROUND_MINUTES,
       createdAt: now,
       expiresAt: now + CHANNEL_IDLE_TTL_MS,
@@ -242,9 +245,15 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       const settled = await this.settledRoundId();
       const current = this.read();
       if (!current) throw new RequestError(404, "unavailable");
-      const { round } = this.status(current, "requester", Date.now(), settled);
+      const { round, channelName } = this.status(
+        current,
+        "requester",
+        Date.now(),
+        settled,
+      );
       return json({
         type: "view",
+        ...(channelName ? { channelName } : {}),
         ...(round ? { round } : {}),
       } satisfies ChannelCommandResult);
     } catch (error) {
@@ -293,6 +302,7 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       ...(binding.viewerCapability
         ? { viewerCapability: binding.viewerCapability }
         : {}),
+      ...(binding.channelName ? { channelName: binding.channelName } : {}),
     };
   }
   private async authenticate(secret: string): Promise<ChannelStatus["role"]> {
@@ -398,11 +408,20 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
    * Called only after the Worker verified Slack's signature for this channel.
    * Resolves to an ephemeral reply, or null on success: the call is the confirmation.
    */
-  async slash(minutes: number | undefined): Promise<string | null> {
+  async slash(
+    minutes: number | undefined,
+    channelName?: string,
+  ): Promise<string | null> {
     const app = frontend(this.env);
     const binding = this.read();
     if (!binding || Date.now() >= binding.expiresAt)
       return `☕ Dit kanaal heeft nog geen Koffierad.${app ? ` Koppel het via ${app.href}#/koffie-koppelen` : ""}`;
+    // Keeps the shown name current when the channel is renamed.
+    const name = validChannelName(channelName);
+    if (name && name !== binding.channelName) {
+      binding.channelName = name;
+      this.save(binding);
+    }
     const chosen = minutes ?? binding.defaultMinutes;
     if (!validRoundMinutes(chosen)) return SLASH_HELP;
     try {
