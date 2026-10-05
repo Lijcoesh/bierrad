@@ -21,6 +21,7 @@ import { formatScheduledTime } from "../utils/schedule";
 import { PlaybackClock } from "../hooks/PlaybackClock";
 import { WheelGrid } from "./WheelGrid";
 import { DrawCountdown } from "./DrawCountdown";
+import { TimeLeft } from "./TimeLeft";
 import { ParticipantDrawer } from "./ParticipantDrawer";
 import { SpectatorResult } from "./SpectatorResult";
 import { Confetti } from "./Confetti";
@@ -140,6 +141,10 @@ export function SpectatorView({
               <p className="spectator-schedule">
                 ⏰ Automatische trekking{" "}
                 {formatScheduledTime(live.scheduledDraw.startAt)}
+                <TimeLeft
+                  startAt={Date.parse(live.scheduledDraw.startAt)}
+                  offsetMs={offset}
+                />
               </p>
             )}
           </>
@@ -150,6 +155,7 @@ export function SpectatorView({
               <p className="spectator-schedule">
                 ⏰ Automatische trekking{" "}
                 {formatScheduledTime(new Date(view.startAt).toISOString())}
+                <TimeLeft startAt={view.startAt} offsetMs={offset} />
               </p>
             ) : (
               <p>Wachten tot het rad gaat draaien…</p>

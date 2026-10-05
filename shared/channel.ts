@@ -83,6 +83,13 @@ export function validRoundMinutes(value: unknown): value is number {
   );
 }
 /**
+ * A round starts on a whole minute, at least `minutes` from now, so the shown
+ * clock time (HH:mm) is exactly when the wheel turns.
+ */
+export function roundStartAt(now: number, minutes: number): number {
+  return Math.ceil((now + minutes * 60000) / 60000) * 60000;
+}
+/**
  * Accepts a Slack channel or message link, or a bare public/private channel ID.
  * Only the ID is used; the link itself is never fetched.
  */

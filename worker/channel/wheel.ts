@@ -5,6 +5,7 @@ import {
   DEFAULT_ROUND_MINUTES,
   isChannelVariant,
   MAX_ROUNDS_PER_DAY,
+  roundStartAt,
   validRoundMinutes,
   type ChannelCommandResult,
   type ChannelStatus,
@@ -508,7 +509,7 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
     }
     if (binding.rounds >= MAX_ROUNDS_PER_DAY)
       throw new RequestError(429, "round_limit");
-    const startAt = Math.ceil((now + minutes * 60000) / 1000) * 1000;
+    const startAt = roundStartAt(now, minutes);
     const id = crypto.randomUUID();
     binding.round = {
       id,
@@ -544,7 +545,6 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
             ? `${app.href}#/koffie/${binding.requestCapability}`
             : `${app.href}#/live/${spectator}`,
         startAt,
-        Date.now(),
         variant,
       ),
     );

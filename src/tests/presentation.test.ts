@@ -7,6 +7,7 @@ import {
   countLabel,
   joinNames,
   spectatorPresentation,
+  timeLeftLabel,
   wheelColumns,
 } from "../domain/presentation";
 import {
@@ -96,6 +97,17 @@ test("countdown digits follow the remaining server time", () => {
   assert.equal(countdownDigit(1), 1);
   assert.equal(countdownDigit(0), 0);
   assert.equal(countdownDigit(-500), 0);
+});
+
+test("time left counts down in minutes and seconds within the last hour", () => {
+  assert.equal(timeLeftLabel(134000), "2:14");
+  assert.equal(timeLeftLabel(133001), "2:14");
+  assert.equal(timeLeftLabel(60000), "1:00");
+  assert.equal(timeLeftLabel(9500), "0:10");
+  assert.equal(timeLeftLabel(3600000), "60:00");
+  assert.equal(timeLeftLabel(3600001), undefined);
+  assert.equal(timeLeftLabel(0), undefined);
+  assert.equal(timeLeftLabel(-1), undefined);
 });
 
 test("draw phases derive from the instruction for late joiners and reconnects", () => {

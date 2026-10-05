@@ -40,15 +40,13 @@ export function callBody(
   channelId: string,
   spectatorLink: string,
   startAt: number,
-  now: number,
   variant: ChannelVariant = "coffee",
 ) {
-  const minutes = Math.max(1, Math.round((startAt - now) / 60000));
   const theme = themes[variant],
     round = channelCopy[variant].round;
   return body(channelId, [
     {
-      text: `${theme.icon} ${round[0].toUpperCase()}${round.slice(1)}! Klik op ${theme.icon} hieronder om mee te doen.\nOver ${minutes} ${minutes === 1 ? "minuut" : "minuten"} (${clock.format(startAt)}) draait het ${theme.name} en kiest het één ${theme.drink}haler. `,
+      text: `${theme.icon} ${round[0].toUpperCase()}${round.slice(1)}! Klik op ${theme.icon} hieronder om mee te doen.\nOm ${clock.format(startAt)} draait het ${theme.name} en kiest het één ${theme.drink}haler. `,
     },
     { text: "Kijk live mee", url: spectatorLink },
   ]);
