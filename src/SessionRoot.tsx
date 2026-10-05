@@ -6,6 +6,7 @@ import { LocalSessionController } from "./sessions/LocalSessionController";
 import {
   RemoteSessionController,
   createLiveSession,
+  seedLiveSession,
 } from "./sessions/RemoteSessionController";
 import { ManualParticipantSource } from "./services/ManualParticipantSource";
 import { LocalWinnerCountPreference } from "./services/WinnerCountPreference";
@@ -132,7 +133,13 @@ function LiveBar({
     setPending(true);
     setNotice("");
     try {
+      const { participants, winnerCount } = controller.getSnapshot().session;
       const created = await createLiveSession(apiUrl, theme.variant);
+      // Carry the wheel the host already set up into the new live session.
+      seedLiveSession(created.hostCapability, {
+        names: participants.map((p) => p.name),
+        winnerCount,
+      });
       // Fragment survives reload, but is never sent to Pages or stored in web storage.
       location.hash = `/host/${created.hostCapability}/${created.spectatorCapability}`;
     } catch (error) {
