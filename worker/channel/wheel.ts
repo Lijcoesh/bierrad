@@ -27,7 +27,7 @@ import { boundBody, callBody } from "./messages";
 import { SLASH_HELP } from "./slash";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** A round can be watched, and blocks the next one, until this long after its start. */
+/** A round can be watched until this long after its start; it stops blocking once drawn. */
 export const ROUND_WATCH_MS = 3 * 60 * 1000;
 
 interface Round {
@@ -149,12 +149,26 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
     this.save(binding);
     await this.arm(binding);
   }
+  /** The current round's ID once its draw is over, so it no longer blocks the next. */
+  private async settledRoundId(): Promise<string | undefined> {
+    const round = this.read()?.round;
+    if (!round || round.status !== "open") return;
+    try {
+      const session = this.env.SESSIONS.getByName(
+        await wordLocator(round.spectatorCapability),
+      );
+      return (await session.channelRoundSettled()) ? round.id : undefined;
+    } catch {
+      return;
+    }
+  }
   private status(
     binding: Binding,
     role: ChannelStatus["role"],
     now: number,
+    settledId?: string,
   ): ChannelStatus {
-    const round = binding.round;
+    const round = binding.round?.id === settledId ? undefined : binding.round;
     const used = now - binding.window >= DAY_MS ? 0 : binding.rounds;
     return {
       role,
@@ -190,12 +204,13 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       const rotated = randomHex();
       const rotatedHash = await hashSecret(rotated);
       const role = await this.authenticate(secret);
+      const settled = await this.settledRoundId();
       if (command === null) {
         const binding = this.read();
         if (!binding) throw new RequestError(404, "unavailable");
         return json({
           type: "status",
-          status: this.status(binding, role, Date.now()),
+          status: this.status(binding, role, Date.now(), settled),
         } satisfies ChannelCommandResult);
       }
       const allowed: Record<string, string[]> = {
@@ -241,7 +256,7 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
           return json({
             type: "rotated",
             requestCapability: `${binding.locator}.${rotated}`,
-            status: this.status(binding, role, Date.now()),
+            status: this.status(binding, role, Date.now(), settled),
           } satisfies ChannelCommandResult);
         }
       }
@@ -249,7 +264,7 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       if (!binding) throw new RequestError(404, "unavailable");
       return json({
         type: "status",
-        status: this.status(binding, role, Date.now()),
+        status: this.status(binding, role, Date.now(), settled),
       } satisfies ChannelCommandResult);
     } catch (error) {
       return json(
@@ -288,6 +303,7 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       wordLocator(spectator),
       hashSecret(spectator),
     ]);
+    const settled = await this.settledRoundId();
     const env = this.slack(),
       app = frontend(this.env);
     const binding = this.read();
@@ -296,7 +312,12 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       throw new RequestError(404, "unavailable");
     if (!loginConfigured(env) || !app)
       throw new RequestError(503, "unavailable");
-    if (binding.round && now < binding.round.endsAt)
+    // A round blocks the next until its draw is over (or it can no longer be watched).
+    if (
+      binding.round &&
+      now < binding.round.endsAt &&
+      binding.round.id !== settled
+    )
       throw new RequestError(409, "round_active");
     if (now - binding.window >= DAY_MS) {
       binding.window = now;

@@ -208,6 +208,7 @@ test(
       stored() { return this.ctx.storage.sql.exec('SELECT value FROM session WHERE singleton = 1').one().value; }
       async due() { this.edit(r => { r.scheduledDraw.startAt = new Date(Date.now() + 4000).toISOString(); }); return this.alarm(); }
       async postNow() { this.edit(r => { r.slack.job.readyAt = 0; }); return this.alarm(); }
+      land() { this.edit(r => { const d = r.session.activeDraw; const end = Math.max(...d.spins.map(s => Date.parse(s.startAt) + s.durationMs)); const shift = end - Date.now() + 1000; const move = t => new Date(Date.parse(t) - shift).toISOString(); d.startAt = move(d.startAt); for (const s of d.spins) s.startAt = move(s.startAt); }); }
     }
     export class TestChannel extends ChannelWheel {
       stored() { if (!this.ctx.storage.sql.exec("SELECT name FROM sqlite_master WHERE name = 'binding'").toArray().length) return null; return this.ctx.storage.sql.exec('SELECT value FROM binding WHERE singleton = 1').toArray()[0]?.value ?? null; }
@@ -418,6 +419,7 @@ test(
         stored(): Promise<string>;
         due(): Promise<void>;
         postNow(): Promise<void>;
+        land(): Promise<void>;
       };
       // The final check reads ☕ reactions; the bot's own never counts or is looked up.
       await session.due();
@@ -434,14 +436,21 @@ test(
       assert.match(String(result.text), /Jij mag koffie halen!/);
       assert.ok(/"user_id":"U0000000[12]"/.test(JSON.stringify(result.blocks)));
 
-      // After the round, the raw spectator link is gone and a slash command starts the next.
-      await channel.finishRound();
-      assert.ok(!(await channel.stored())!.includes(viewer));
+      // While the wheel still spins, the round keeps blocking the next one.
+      assert.equal((await api(requester, { type: "requestRound", minutes: 2 })).status, 409);
+      // Once it has stopped, a new round can start right away, well before the watch window ends.
+      await session.land();
       assert.equal(((await status(requester)) as { status: { round?: object } }).status.round, undefined);
       const reply = (await (await slash({ text: "2" })).json()) as { text: string };
       assert.match(reply.text, /Gelukt!/);
       assert.equal(posts.at(-1)!.channel, "C00000001");
       assert.equal(reactionsAdded.length, 2);
+      // The new round replaced the old raw spectator link; after its window the next one is wiped too.
+      assert.ok(!(await channel.stored())!.includes(viewer));
+      assert.ok(((await status(requester)) as { status: { round?: object } }).status.round);
+      await channel.finishRound();
+      assert.ok(!(await channel.stored())!.includes('"round"'));
+      assert.equal(((await status(requester)) as { status: { round?: object } }).status.round, undefined);
 
       // Forged, stale or unknown slash commands do nothing.
       const count = posts.length;
