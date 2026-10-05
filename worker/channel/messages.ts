@@ -52,11 +52,11 @@ export function callBody(
 export function boundBody(channelId: string, requestLink: string) {
   return body(channelId, [
     {
-      text: "☕ Het Koffierad is aan dit kanaal gekoppeld! Vraag een koffieronde aan met /koffierad (of /koffierad 10 voor tien minuten) of via ",
+      text: "☕ Het Koffierad is aan dit kanaal gekoppeld! Dit is ",
     },
-    { text: "de aanvraaglink", url: requestLink },
+    { text: "het vaste Koffierad van dit kanaal", url: requestLink },
     {
-      text: ". Meedoen doe je door op ☕ te klikken onder de oproep. Eerdere aanvraaglinks van dit kanaal werken niet meer.",
+      text: ": daar zie je steeds de huidige ronde en vraag je een nieuwe aan. Of typ /koffierad (of /koffierad 10 voor tien minuten). Meedoen doe je door op ☕ te klikken onder de oproep. Eerdere links van dit kanaal werken niet meer.",
     },
   ]);
 }

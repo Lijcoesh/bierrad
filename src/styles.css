@@ -1368,7 +1368,6 @@ footer b {
 }
 .channel-form,
 .channel-request,
-.channel-round,
 .channel-admin {
   display: flex;
   flex-direction: column;
@@ -1417,15 +1416,6 @@ footer b {
   color: #fffdf8;
   font-weight: 700;
 }
-.channel-round {
-  padding: 18px;
-  border-radius: 14px;
-  background: #f2ecdd;
-}
-.channel-round a.primary {
-  text-decoration: none;
-  color: inherit;
-}
 .channel-admin {
   margin-top: 20px;
   padding-top: 18px;
@@ -1445,4 +1435,50 @@ footer b {
   padding: 1px 5px;
   border-radius: 5px;
   background: #f2ecdd;
+}
+/* Fixed channel page: a slim strip above the latest round's live wheel. */
+.channel-live {
+  height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+.channel-live .spectator {
+  height: auto;
+  flex: 1;
+  min-height: 0;
+  /* Auto margins would otherwise shrink it to its content in this column. */
+  width: 100%;
+  box-sizing: border-box;
+}
+.channel-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 16px;
+  padding: 10px 16px;
+  background: #f2ecdd;
+  font-size: 14px;
+  text-align: center;
+}
+.channel-strip-request {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.channel-strip select {
+  padding: 6px 8px;
+  border: 1px solid #d4c7a7;
+  border-radius: 8px;
+  background: #fffdf8;
+  font: inherit;
+}
+.channel-strip .primary {
+  padding: 9px 16px;
+  box-shadow: 0 3px 0 #302e26;
+}
+.channel-strip small {
+  flex-basis: 100%;
 }

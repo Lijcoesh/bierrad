@@ -158,6 +158,7 @@ async function slackAuth(
             ...(workspace.botUserId ? { botUserId: workspace.botUserId } : {}),
             adminHash,
             requestHash,
+            requestCapability,
           },
           `${app.href}#/koffie/${requestCapability}`,
         );
@@ -232,22 +233,22 @@ async function slashCommand(
     ).slash(command.minutes);
     // Slack waits about three seconds; the round continues after we answer.
     ctx.waitUntil(work.catch(() => undefined));
-    return ephemeral(
-      await Promise.race([
-        work.catch(
-          () => "☕ Het Koffierad is nu niet bereikbaar. Probeer het zo opnieuw.",
+    const reply = await Promise.race([
+      work.catch(
+        () => "☕ Het Koffierad is nu niet bereikbaar. Probeer het zo opnieuw.",
+      ),
+      new Promise<string>((resolve) =>
+        setTimeout(
+          () =>
+            resolve(
+              "☕ De koffieronde wordt aangevraagd. Kijk zo in het kanaal.",
+            ),
+          2500,
         ),
-        new Promise<string>((resolve) =>
-          setTimeout(
-            () =>
-              resolve(
-                "☕ De koffieronde wordt aangevraagd. Kijk zo in het kanaal.",
-              ),
-            2500,
-          ),
-        ),
-      ]),
-    );
+      ),
+    ]);
+    // An empty 200 shows nothing in Slack: the call in the channel says enough.
+    return reply === null ? new Response(null, { status: 200 }) : ephemeral(reply);
   } catch {
     return json({ code: "invalid" }, 400);
   }

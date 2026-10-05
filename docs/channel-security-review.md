@@ -13,14 +13,14 @@ Implementation review against SECURITY.md (section "Channel-bound Koffierad", ad
 
 ## Data and retention
 
-- Stored per binding: channel ID, workspace ID, bot user ID, admin/request hashes, default minutes, daily counter, idle expiry and, while a round is watchable (start + 3 minutes), that round's raw spectator capability. No binder, requester or participant data.
+- Stored per binding: channel ID, workspace ID, bot user ID, admin/request hashes, the raw request capability (already public in the channel; used only to build the call's link to the fixed channel page and never returned in a DTO), default minutes, daily counter, idle expiry and, while a round is watchable (start + 3 minutes), that round's raw spectator capability. No binder, requester or participant data.
 - Bindings expire 90 days after the last bind or round, or on unbind (`deleteAll`). Every access checks expiry; the alarm deletes expired state, and deletes the raw spectator capability after each round.
 - Rounds are ordinary temporary LiveSessions: spectator-only (the host hash is of a discarded random value), one winner, expiry start + 1 hour, and a `slack-channel` grant that fails closed when the coffee login or bot secrets are removed. The bot user ID is a private exclusion list and never appears in DTOs.
 
 ## Slack behaviour
 
 - Scopes added: `reactions:write` (only `reactions.add` of `:coffee:` on the bot's own call message) and `commands`. No `channels:read`, history, events or interactivity.
-- Messages are fixed text with server-built links (`FRONTEND_URL` + fragment), `mrkdwn: false`, `parse: none`, no link names, no unfurls. The call is top-level; results and notices are thread replies with `reply_broadcast: false`. Result mentions use only server-frozen identities, as before.
+- Messages are fixed text with server-built links (`FRONTEND_URL` + fragment), `mrkdwn: false`, `parse: none`, no link names, no unfurls. The call is top-level and links to the fixed channel page; results and notices are thread replies with `reply_broadcast: false`. Result mentions use only server-frozen identities, as before.
 - Rounds are claimed before I/O. A definite rejection of the call clears the round; an uncertain result is not retried. Reaction refreshes happen at most once per minute and never within 30 seconds of the final check, so a refresh cannot block the draw.
 
 ## Accepted limitations
