@@ -130,7 +130,7 @@ npx wrangler secret put COFFEE_SLACK_SIGNING_SECRET --env=""
 - Aanvragen via de aanvraaglink (keuze 1, 2, 3, 5, 10 of 15 minuten, standaard 5) of met `/koffierad` / `/koffierad 10` (1 tot 30 minuten) in het kanaal. Het slashcommando antwoordt alleen zichtbaar voor de aanvrager.
 - De bot plaatst een oproep in het kanaal met een kijklink en zet er direct een ☕ onder. Collega's klikken die ☕ aan. De botreactie telt nooit mee: de bot wordt op gebruikers-ID én als bot uitgefilterd.
 - Elke minuut leest de server de reacties, zodat kijkers het rad zien vollopen. Vlak voor de start volgt de normale eindcontrole. Daarna draait het rad met precies één winnaar, die met @vermelding in de thread van de oproep wordt gemeld. Zonder deelnemers, of als de reacties niet te lezen zijn, plaatst de bot daar een vaste melding.
-- Per kanaal loopt er hooguit één ronde tegelijk, met maximaal 20 rondes per 24 uur. Er wordt niet vermeld wie de ronde aanvroeg.
+- Per kanaal loopt er hooguit één ronde tegelijk, met maximaal 20 rondes per 24 uur. Zodra het rad is gestopt (of de ronde niet doorging), kan direct een nieuwe ronde worden aangevraagd. Er wordt niet vermeld wie de ronde aanvroeg.
 
 ### Beheer en intrekken
 

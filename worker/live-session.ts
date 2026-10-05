@@ -124,6 +124,17 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
     this.save(record);
     await this.ctx.storage.setAlarm(nextDeadline(record));
   }
+  /** True once a channel round no longer blocks the next: drawn and stopped, skipped or gone. */
+  async channelRoundSettled(): Promise<boolean> {
+    const record = this.read();
+    if (!record || Date.now() >= record.expiresAt) return true;
+    // Evaluate the current phase without waiting for the alarm; nothing is saved.
+    advance(record, Date.now());
+    return (
+      record.session.state === "finished" ||
+      (record.scheduledDraw?.status === "skipped" && !record.session.activeDraw)
+    );
+  }
   private async expire() {
     for (const ws of this.ctx.getWebSockets()) {
       try {
