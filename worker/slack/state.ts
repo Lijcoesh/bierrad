@@ -1,4 +1,4 @@
-import { themes } from "../../shared/variant";
+import { reactionVariant, themes } from "../../shared/variant";
 import { createSession } from "../../src/domain/drawEngine";
 import type { WheelVariant } from "../../shared/variant";
 import type { SlackReminderStatus } from "../../shared/protocol";
@@ -170,8 +170,7 @@ function noticeBody(source: SlackSource, text: string) {
 }
 export function resultBody(job: SlackJob) {
   if (job.notice) return noticeBody(job.source, notices[job.notice]);
-  const theme =
-    themes[job.source.reactionName === "coffee" ? "coffee" : "beer"];
+  const theme = themes[reactionVariant(job.source.reactionName)];
   const heading = `${theme.icon} Het rad heeft gesproken!\n`;
   const ending = `${job.names.length === 1 ? "Jij mag" : "Jullie mogen"} ${theme.drink} halen!`;
   const text = `${heading}${job.names.join(" · ")}\n${ending}`;

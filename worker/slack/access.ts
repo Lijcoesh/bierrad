@@ -1,4 +1,4 @@
-import type { WheelVariant } from "../../shared/variant";
+import { themes, type WheelVariant } from "../../shared/variant";
 import {
   MAX_SCHEDULE_AHEAD_MS,
   SCHEDULE_RETENTION_MS,
@@ -46,7 +46,8 @@ export function slackEnvironment(
   env: SlackSecrets,
   variant: WheelVariant = "beer",
 ): SlackSecrets {
-  return variant === "coffee"
+  // Every variant names its own app; there is no fallback to another bot.
+  return themes[variant].slackApp === "coffee"
     ? {
         SLACK_BOT_TOKEN: env.COFFEE_SLACK_BOT_TOKEN,
         SLACK_CLIENT_ID: env.COFFEE_SLACK_CLIENT_ID,

@@ -30,11 +30,7 @@ export function FinalResult({
           ? `Jij mag ${theme.drink} halen!`
           : `Jullie mogen ${theme.drink} halen!`}
       </h3>
-      <p>
-        {theme.variant === "coffee"
-          ? "De koffiepauze kan beginnen. Maak ons trots."
-          : "Het volk heeft dorst. Maak ons trots."}
-      </p>
+      <p>{theme.ending}</p>
       {canControl && (
         <>
           <button className="primary" disabled={disabled} onClick={onAgain}>

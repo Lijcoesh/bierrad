@@ -92,7 +92,9 @@ async function slackAuth(
   if (!app) return json({ code: "unavailable" }, 503);
   const callback = `${url.origin}/auth/slack/callback`;
   const pending = parseLoginCookie(request.headers.get("Cookie"));
-  const start = /^\/auth\/slack\/(beer|coffee)$/.exec(url.pathname);
+  const named = /^\/auth\/slack\/([a-z]+)$/.exec(url.pathname);
+  // `callback` and unknown names are not login starts.
+  const start = named && isWheelVariant(named[1]) ? named : null;
   // Binding a Koffierad to a channel: the channel travels in the login cookie.
   const bindStart = /^\/auth\/slack\/channel\/([CG][A-Z0-9]{8,20})$/.exec(
     url.pathname,
@@ -110,7 +112,7 @@ async function slackAuth(
     redirect(
       binding
         ? `${app.href}#/koffie-koppelen/${reason}`
-        : `${app.href}#/${variant === "coffee" ? "coffee-" : ""}slack/${reason}`,
+        : `${app.href}#/${variant === "beer" ? "" : `${variant}-`}slack/${reason}`,
       clear,
     );
   try {
