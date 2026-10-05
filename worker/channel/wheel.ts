@@ -475,10 +475,13 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       binding.channelId,
       callBody(
         binding.channelId,
-        // The fixed channel page follows every round; older bindings link per round.
-        binding.requestCapability
-          ? `${app.href}#/koffie/${binding.requestCapability}`
-          : `${app.href}#/live/${spectator}`,
+        // The view-only word link follows every round. Older bindings fall back
+        // to the fixed channel page, or else link per round.
+        binding.viewerCapability
+          ? `${app.href}#/koffie/${binding.viewerCapability}`
+          : binding.requestCapability
+            ? `${app.href}#/koffie/${binding.requestCapability}`
+            : `${app.href}#/live/${spectator}`,
         startAt,
         Date.now(),
       ),

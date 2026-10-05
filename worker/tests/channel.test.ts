@@ -398,11 +398,12 @@ test(
       const call = posts.at(-1)!;
       assert.equal(call.channel, "C00000001");
       assert.equal(call.thread_ts, undefined);
-      // The call links to the fixed channel page, not to a per-round link.
-      assert.ok(JSON.stringify(call.blocks).includes(`"url":"http://127.0.0.1:5173/#/koffie/${requester}"`));
+      // "Kijk live mee" links to the view-only word link (requested by the owner):
+      // never the request link, never a per-round link.
+      assert.ok(JSON.stringify(call.blocks).includes(`"url":"http://127.0.0.1:5173/#/koffie/${watcher}"`));
+      assert.ok(!JSON.stringify(call).includes(requester.split(".")[1]));
       assert.ok(!JSON.stringify(call).includes(round.spectatorCapability));
       assert.equal(round.active, true);
-      assert.ok(!JSON.stringify(call).includes(watcher));
       // The word link sees the same round and nothing more.
       assert.deepEqual(await status(watcher), { type: "view", round });
       // No DTO ever returns the stored request link.
