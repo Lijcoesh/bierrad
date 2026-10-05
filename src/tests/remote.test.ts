@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RemoteSessionController } from "../sessions/RemoteSessionController";
+import {
+  RemoteSessionController,
+  seedLiveSession,
+} from "../sessions/RemoteSessionController";
 import { parseLiveRoute } from "../sessions/liveNavigation";
 import { createSession, startDraw } from "../domain/drawEngine";
 import type {
@@ -192,7 +195,8 @@ test("invalid access clears state, fragment routes separate host and viewer acce
     parseLiveRoute(`#/host/${capability}/${capability}`)?.spectatorCapability,
     capability,
   );
-  const words = "bier-rad-tulp-kaas-molen-fiets-klomp-haring-dijk-polder-gracht-kade-zon";
+  const words =
+    "bier-rad-tulp-kaas-molen-fiets-klomp-haring-dijk-polder-gracht-kade-zon";
   assert.equal(parseLiveRoute(`#/live/${words}`)?.capability, words);
   assert.equal(
     parseLiveRoute(`#/host/${capability}/${words}`)?.spectatorCapability,
@@ -292,7 +296,12 @@ test("host shares its spectator link with a scheduled draw only on request", asy
     spectatorCapability: viewer,
     fetch: (async (_url, options) => {
       if (options?.body) bodies.push(JSON.parse(String(options.body)));
-      return Response.json({ type: "snapshot", role: "host", session: dto, serverNow });
+      return Response.json({
+        type: "snapshot",
+        role: "host",
+        session: dto,
+        serverNow,
+      });
     }) as typeof fetch,
     socket: () => socket as unknown as WebSocket,
   });
@@ -318,4 +327,72 @@ test("host shares its spectator link with a scheduled draw only on request", asy
   });
   assert.equal(bare.canShareSpectatorLink, false);
   bare.dispose();
+});
+test("a new live session takes over the host's local roster once via host commands", async () => {
+  const serverNow = Date.now(),
+    socket = new FakeSocket();
+  let dto: PublicBeerWheelSession = {
+    participants: [],
+    winnerCount: 2,
+    state: "setup",
+    winnerIds: [],
+    revision: 0,
+    expiresAt: new Date(serverNow + 3600000).toISOString(),
+  };
+  const bodies: Record<string, unknown>[] = [];
+  seedLiveSession(capability, {
+    names: ["Alice", "Bob", "Charlie"],
+    winnerCount: 3,
+  });
+  const controller = new RemoteSessionController({
+    apiUrl: "https://example.invalid",
+    role: "host",
+    capability,
+    fetch: (async (_url, options) => {
+      if (options?.body) {
+        const body = JSON.parse(String(options.body));
+        bodies.push(body);
+        dto =
+          body.type === "setParticipants"
+            ? {
+                ...dto,
+                revision: dto.revision + 1,
+                participants: body.names.map((name: string, i: number) => ({
+                  id: `p${i}`,
+                  name,
+                })),
+              }
+            : { ...dto, revision: dto.revision + 1, winnerCount: body.count };
+      }
+      return Response.json({
+        type: "snapshot",
+        role: "host",
+        session: dto,
+        serverNow,
+      });
+    }) as typeof fetch,
+    socket: () => socket as unknown as WebSocket,
+  });
+  try {
+    await controller.initialize();
+    socket.deliver({ type: "snapshot", role: "host", session: dto, serverNow });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(
+      bodies.map((b) => b.type),
+      ["setParticipants", "setWinnerCount"],
+    );
+    assert.deepEqual(bodies[0].names, ["Alice", "Bob", "Charlie"]);
+    assert.equal(controller.getSnapshot().session.winnerCount, 3);
+    socket.deliver({
+      type: "snapshot",
+      role: "host",
+      session: { ...dto, participants: [], revision: 9 },
+      serverNow,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(bodies.length, 2, "the roster is handed over only once");
+  } finally {
+    controller.dispose();
+  }
 });

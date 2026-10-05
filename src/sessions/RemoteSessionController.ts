@@ -57,6 +57,18 @@ export async function createLiveSession(
     );
   return response.json() as Promise<CreatedSession>;
 }
+export interface LiveSeed {
+  names: readonly string[];
+  winnerCount: number;
+}
+// In-memory only: the hash navigation keeps this module alive, so the wheel the
+// host just set up can follow them into live mode without URLs or web storage.
+const seeds = new Map<string, LiveSeed>();
+/** Hands the local roster to the next host controller for this capability. */
+export function seedLiveSession(hostCapability: string, seed: LiveSeed) {
+  seeds.clear();
+  if (seed.names.length) seeds.set(hostCapability, seed);
+}
 /** Owns transport; no participant storage, winner selection or official local transitions. */
 export class RemoteSessionController implements SessionController {
   private snapshot: SessionSnapshot;
@@ -156,6 +168,30 @@ export class RemoteSessionController implements SessionController {
       this.ws?.readyState === 1 ? "connected" : "connecting",
       session,
     );
+    if (this.snapshot.live?.status === "connected") void this.applySeed();
+  }
+  /** Sends a handed-over local roster through the regular host commands, once. */
+  private async applySeed() {
+    const seed = seeds.get(this.options.capability);
+    if (!seed || this.options.role !== "host") return;
+    seeds.delete(this.options.capability);
+    const { session } = this.snapshot;
+    if (session.state !== "setup" || session.participants.length) return;
+    try {
+      await this.command({ type: "setParticipants", names: [...seed.names] });
+      const count = Math.min(
+        seed.winnerCount,
+        this.snapshot.session.participants.length,
+      );
+      if (count >= 1 && count !== this.snapshot.session.winnerCount)
+        await this.command({ type: "setWinnerCount", count });
+    } catch {
+      this.publish(
+        this.snapshot.live?.status ?? "connecting",
+        this.snapshot.session,
+        "Je deelnemers konden niet worden overgenomen. Voeg ze hier opnieuw toe.",
+      );
+    }
   }
   private armExpiry() {
     clearTimeout(this.expiry);
