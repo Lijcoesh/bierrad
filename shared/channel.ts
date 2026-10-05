@@ -10,8 +10,11 @@ export const CHANNEL_IDLE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 export interface ChannelStatus {
   role: "admin" | "requester";
   defaultMinutes: number;
-  /** The current round, while it can still be watched. */
-  round?: { startAt: string; spectatorCapability: string };
+  /**
+   * The latest round while it can still be watched; `active` until its draw is
+   * over, after which a new round may be requested.
+   */
+  round?: { startAt: string; spectatorCapability: string; active: boolean };
   roundsLeft: number;
   expiresAt: string;
 }

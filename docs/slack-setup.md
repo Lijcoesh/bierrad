@@ -123,12 +123,12 @@ npx wrangler secret put COFFEE_SLACK_SIGNING_SECRET --env=""
 
 1. Nodig de bot uit in het kanaal: `/invite @Koffierad`.
 2. Open `https://timzegveld.github.io/bierrad/#/koffie-koppelen` (ook bereikbaar via **Koppel aan een Slack-kanaal** op het Koffierad), plak de kanaallink en log in met Slack. Alleen volwaardige leden van de workspace kunnen koppelen.
-3. De bot plaatst een bevestiging met de aanvraaglink in het kanaal. Jij komt op de **beheerpagina**: bewaar die link zelf, want hij wordt nergens anders getoond. Opnieuw koppelen van hetzelfde kanaal maakt nieuwe links en laat de oude vervallen.
+3. De bot plaatst een bevestiging met de vaste kanaallink in het kanaal. Die pagina is het vaste Koffierad van het kanaal: ze toont steeds het live rad en de uitslag van de laatste ronde en, als er niets loopt, de knop voor een nieuwe ronde. Geschikt voor een kantoor-tv. Jij komt op de **beheerpagina**: bewaar die link zelf, want hij wordt nergens anders getoond. Opnieuw koppelen van hetzelfde kanaal maakt nieuwe links en laat de oude vervallen.
 
 ### Een ronde
 
-- Aanvragen via de aanvraaglink (keuze 1, 2, 3, 5, 10 of 15 minuten, standaard 5) of met `/koffierad` / `/koffierad 10` (1 tot 30 minuten) in het kanaal. Het slashcommando antwoordt alleen zichtbaar voor de aanvrager.
-- De bot plaatst een oproep in het kanaal met een kijklink en zet er direct een ☕ onder. Collega's klikken die ☕ aan. De botreactie telt nooit mee: de bot wordt op gebruikers-ID én als bot uitgefilterd.
+- Aanvragen via de aanvraaglink (keuze 1, 2, 3, 5, 10 of 15 minuten, standaard 5) of met `/koffierad` / `/koffierad 10` (1 tot 30 minuten) in het kanaal. Bij succes antwoordt het slashcommando niet (de oproep is de bevestiging); foutmeldingen zie alleen jij.
+- De bot plaatst een oproep in het kanaal met een link naar het vaste kanaalrad en zet er direct een ☕ onder. Collega's klikken die ☕ aan. De botreactie telt nooit mee: de bot wordt op gebruikers-ID én als bot uitgefilterd.
 - Elke minuut leest de server de reacties, zodat kijkers het rad zien vollopen. Vlak voor de start volgt de normale eindcontrole. Daarna draait het rad met precies één winnaar, die met @vermelding in de thread van de oproep wordt gemeld. Zonder deelnemers, of als de reacties niet te lezen zijn, plaatst de bot daar een vaste melding.
 - Per kanaal loopt er hooguit één ronde tegelijk, met maximaal 20 rondes per 24 uur. Zodra het rad is gestopt (of de ronde niet doorging), kan direct een nieuwe ronde worden aangevraagd. Er wordt niet vermeld wie de ronde aanvroeg.
 
