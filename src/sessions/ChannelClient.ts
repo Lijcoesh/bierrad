@@ -4,6 +4,8 @@ import type {
 } from "../../shared/channel";
 
 const hex = String.raw`[a-f0-9]{32}\.[a-f0-9]{64}`;
+/** The view-only word link of a channel: 5 chained words. */
+const words = String.raw`[a-z]{2,8}(?:-[a-z]{2,8}){4}`;
 export type ChannelBindFailure =
   | "denied"
   | "forbidden"
@@ -13,7 +15,8 @@ export type ChannelBindFailure =
   | "not_in_channel";
 export type ChannelRoute =
   | { page: "bind"; failure?: ChannelBindFailure }
-  | { page: "wheel"; capability: string; requestCapability?: string };
+  | { page: "wheel"; capability: string; requestCapability?: string }
+  | { page: "view"; capability: string };
 /** Channel links live only in the fragment, never in storage or requests to Pages. */
 export function parseChannelRoute(hash: string): ChannelRoute | null {
   const bind =
@@ -27,6 +30,8 @@ export function parseChannelRoute(hash: string): ChannelRoute | null {
     };
   const request = new RegExp(`^#/koffie/(${hex})$`).exec(hash);
   if (request) return { page: "wheel", capability: request[1] };
+  const view = new RegExp(`^#/koffie/(${words})$`).exec(hash);
+  if (view) return { page: "view", capability: view[1] };
   const admin = new RegExp(`^#/koffie-beheer/(${hex})/(${hex})$`).exec(hash);
   return admin
     ? { page: "wheel", capability: admin[1], requestCapability: admin[2] }
@@ -34,6 +39,10 @@ export function parseChannelRoute(hash: string): ChannelRoute | null {
 }
 export function channelLink(requestCapability: string): string {
   return `${location.origin}${location.pathname}#/koffie/${requestCapability}`;
+}
+/** Without the scheme: short enough to type on another screen. */
+export function channelViewLink(viewerCapability: string): string {
+  return `${location.host}${location.pathname}#/koffie/${viewerCapability}`;
 }
 export function channelBindUrl(apiUrl: string, channelId: string): string {
   return `${apiUrl}/auth/slack/channel/${channelId}`;

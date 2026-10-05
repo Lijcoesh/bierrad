@@ -7,16 +7,23 @@ export const MAX_ROUNDS_PER_DAY = 20;
 /** A binding is removed after this long without a bind or round request. */
 export const CHANNEL_IDLE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
+/**
+ * The latest round while it can still be watched; `active` until its draw is
+ * over, after which a new round may be requested.
+ */
+export interface ChannelRound {
+  startAt: string;
+  spectatorCapability: string;
+  active: boolean;
+}
 export interface ChannelStatus {
   role: "admin" | "requester";
   defaultMinutes: number;
-  /**
-   * The latest round while it can still be watched; `active` until its draw is
-   * over, after which a new round may be requested.
-   */
-  round?: { startAt: string; spectatorCapability: string; active: boolean };
+  round?: ChannelRound;
   roundsLeft: number;
   expiresAt: string;
+  /** View-only word link of the channel, easy to type on another screen. */
+  viewerCapability?: string;
 }
 export type ChannelCommand =
   | { type: "requestRound"; minutes: number }
@@ -26,7 +33,9 @@ export type ChannelCommand =
 export type ChannelCommandResult =
   | { type: "status"; status: ChannelStatus }
   | { type: "rotated"; requestCapability: string; status: ChannelStatus }
-  | { type: "unbound" };
+  | { type: "unbound" }
+  /** All a view-only word link gets: the latest round, no commands. */
+  | { type: "view"; round?: ChannelRound };
 
 export function validRoundMinutes(value: unknown): value is number {
   return (

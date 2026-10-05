@@ -25,7 +25,7 @@ import {
 import { frontend, json, readBody, redirect } from "./http";
 import { RequestError } from "./session";
 import { validRoundMinutes } from "../shared/channel";
-import { channelLocator } from "./channel/wheel";
+import { channelLocator, channelViewerLocator } from "./channel/wheel";
 import {
   ephemeral,
   parseSlashCommand,
@@ -306,23 +306,30 @@ export default {
             request.headers.get("Authorization")?.replace(/^Bearer /, "") ??
               null,
           );
-          // Channel links are always hex `locator.secret`.
-          if (!capability?.locator) throw new RequestError(404, "unavailable");
-          const command =
-            request.method === "POST" ? await readBody(request) : null;
-          // A round creates a session: it spends the creation budget too.
-          if (
-            command &&
-            typeof command === "object" &&
-            "type" in command &&
-            command.type === "requestRound" &&
-            !(await creationAllowed(env, ip))
-          )
-            throw new RequestError(429, "rate_limited");
-          response = await env.CHANNELS.getByName(capability.locator).access(
-            capability.secret,
-            command,
-          );
+          if (!capability) throw new RequestError(404, "unavailable");
+          // Word links only watch a channel: no commands, ever.
+          if (!capability.locator) {
+            if (request.method !== "GET") throw new RequestError(405, "invalid");
+            response = await env.CHANNELS.getByName(
+              await channelViewerLocator(capability.secret),
+            ).view(capability.secret);
+          } else {
+            const command =
+              request.method === "POST" ? await readBody(request) : null;
+            // A round creates a session: it spends the creation budget too.
+            if (
+              command &&
+              typeof command === "object" &&
+              "type" in command &&
+              command.type === "requestRound" &&
+              !(await creationAllowed(env, ip))
+            )
+              throw new RequestError(429, "rate_limited");
+            response = await env.CHANNELS.getByName(capability.locator).access(
+              capability.secret,
+              command,
+            );
+          }
         } else if (
           ["/api/session", "/api/command", "/api/socket"].includes(url.pathname)
         ) {

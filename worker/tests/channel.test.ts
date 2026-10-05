@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
-import { randomHex, wordLocator } from "../auth";
+import { hashSecret, randomHex, wordLocator } from "../auth";
 import {
   parseSlashCommand,
   verifySlackSignature,
@@ -212,6 +212,7 @@ test(
     }
     export class TestChannel extends ChannelWheel {
       stored() { if (!this.ctx.storage.sql.exec("SELECT name FROM sqlite_master WHERE name = 'binding'").toArray().length) return null; return this.ctx.storage.sql.exec('SELECT value FROM binding WHERE singleton = 1').toArray()[0]?.value ?? null; }
+      pointed() { return this.ctx.storage.sql.exec("SELECT name FROM sqlite_master WHERE name = 'pointer'").toArray().length > 0; }
       async finishRound() { const b = JSON.parse(this.stored()); b.round.endsAt = Date.now() - 1; this.ctx.storage.sql.exec('UPDATE binding SET value = ? WHERE singleton = 1', JSON.stringify(b)); return this.alarm(); }
     }`,
             compatibilityDate: "2026-09-25",
@@ -367,10 +368,18 @@ test(
         assert.ok(!stored.includes(secret));
 
       const initial = ((await status(requester)) as { status: Record<string, unknown> }).status;
+      const watcher = String(initial.viewerCapability);
+      assert.match(watcher, /^[a-z]{2,8}(?:-[a-z]{2,8}){4}$/);
       assert.deepEqual(
-        { ...initial, expiresAt: undefined },
-        { role: "requester", defaultMinutes: 5, roundsLeft: 20, expiresAt: undefined },
+        { ...initial, expiresAt: undefined, viewerCapability: undefined },
+        { role: "requester", defaultMinutes: 5, roundsLeft: 20, expiresAt: undefined, viewerCapability: undefined },
       );
+      // The word link is never posted and only stored as a hash and a raw copy for link holders.
+      assert.ok(!JSON.stringify(posts).includes(watcher));
+      // It only watches: no round yet, no settings, no commands of any kind.
+      assert.deepEqual(await status(watcher), { type: "view" });
+      for (const command of [{ type: "requestRound", minutes: 5 }, { type: "unbind" }, { type: "rotateRequestLink" }])
+        assert.equal((await api(watcher, command)).status, 405);
       assert.ok(Date.parse(String(initial.expiresAt)) > Date.now() + 89 * 24 * 3600000);
       // Requesters cannot manage; unknown links, shapes and hosts are refused.
       for (const command of [{ type: "unbind" }, { type: "rotateRequestLink" }, { type: "setDefaultMinutes", minutes: 3 }])
@@ -393,6 +402,9 @@ test(
       assert.ok(JSON.stringify(call.blocks).includes(`"url":"http://127.0.0.1:5173/#/koffie/${requester}"`));
       assert.ok(!JSON.stringify(call).includes(round.spectatorCapability));
       assert.equal(round.active, true);
+      assert.ok(!JSON.stringify(call).includes(watcher));
+      // The word link sees the same round and nothing more.
+      assert.deepEqual(await status(watcher), { type: "view", round });
       // No DTO ever returns the stored request link.
       assert.ok(!JSON.stringify(started).includes(requester.split(".")[1]));
       assert.ok(!JSON.stringify(await status(admin)).includes(requester.split(".")[1]));
@@ -478,12 +490,24 @@ test(
       const rotated = (await status(admin, { type: "rotateRequestLink" })) as { requestCapability: string };
       assert.equal((await api(requester)).status, 404);
       assert.equal(((await status(rotated.requestCapability)) as { status: { role: string } }).status.role, "requester");
+      // Rotation also replaces the word link; the old one stops working.
+      const newWatcher = ((await status(rotated.requestCapability)) as { status: { viewerCapability: string } }).status.viewerCapability;
+      assert.notEqual(newWatcher, watcher);
+      assert.equal((await api(watcher)).status, 404);
+      assert.equal(((await status(newWatcher)) as { type: string }).type, "view");
+      const pointer = async (words: string) =>
+        (namespace.get(namespace.idFromName((await hashSecret(`koffierad-viewer:${words}`)).slice(0, 32))) as unknown as { pointed(): Promise<boolean> }).pointed();
+      assert.equal(await pointer(watcher), false);
+      assert.equal(await pointer(newWatcher), true);
+      assert.ok(!(await channel.stored())!.includes(watcher));
       // Later calls link to the new fixed page.
       assert.ok((await channel.stored())!.includes(rotated.requestCapability));
       assert.ok(!(await channel.stored())!.includes(requester));
       assert.deepEqual(await status(admin, { type: "unbind" }), { type: "unbound" });
       assert.equal((await api(admin)).status, 404);
       assert.equal((await api(rotated.requestCapability)).status, 404);
+      assert.equal((await api(newWatcher)).status, 404);
+      assert.equal(await pointer(newWatcher), false);
       assert.equal(await channel.stored(), null);
     } finally {
       await mf.dispose();

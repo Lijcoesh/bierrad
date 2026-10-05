@@ -9,7 +9,7 @@ import {
 const cap = `${"a".repeat(32)}.${"b".repeat(64)}`;
 const other = `${"c".repeat(32)}.${"d".repeat(64)}`;
 
-test("channel routes accept only exact fragments with hex capabilities", () => {
+test("channel routes accept only exact fragments with hex or 5-word capabilities", () => {
   assert.deepEqual(parseChannelRoute("#/koffie-koppelen"), { page: "bind" });
   assert.deepEqual(parseChannelRoute("#/koffie-koppelen/not_in_channel"), {
     page: "bind",
@@ -19,6 +19,11 @@ test("channel routes accept only exact fragments with hex capabilities", () => {
     page: "wheel",
     capability: cap,
   });
+  // The word link only watches.
+  assert.deepEqual(parseChannelRoute("#/koffie/aap-beer-dak-fiets-hoed"), {
+    page: "view",
+    capability: "aap-beer-dak-fiets-hoed",
+  });
   assert.deepEqual(parseChannelRoute(`#/koffie-beheer/${cap}/${other}`), {
     page: "wheel",
     capability: cap,
@@ -27,7 +32,10 @@ test("channel routes accept only exact fragments with hex capabilities", () => {
   for (const hash of [
     "#/koffie-koppelen/other",
     `#/koffie/${cap}/extra`,
-    "#/koffie/one-two-three-four-five",
+    "#/koffie/aap-beer-dak-fiets",
+    "#/koffie/aap-beer-dak-fiets-hoed-jas",
+    "#/koffie/Aap-beer-dak-fiets-hoed",
+    "#/koffie-beheer/aap-beer-dak-fiets-hoed",
     `#/koffie-beheer/${cap}`,
     "#/coffee",
   ])

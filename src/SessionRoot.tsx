@@ -16,7 +16,11 @@ import {
   parseLiveRoute,
 } from "./sessions/liveNavigation";
 import { parseChannelRoute } from "./sessions/ChannelClient";
-import { ChannelBindPage, ChannelWheelPage } from "./components/ChannelPages";
+import {
+  ChannelBindPage,
+  ChannelViewPage,
+  ChannelWheelPage,
+} from "./components/ChannelPages";
 
 export function SessionRoot() {
   const [hash, setHash] = useState(location.hash);
@@ -31,6 +35,8 @@ export function SessionRoot() {
       <VariantContext.Provider value="coffee">
         {channel.page === "bind" ? (
           <ChannelBindPage key={hash} failure={channel.failure} />
+        ) : channel.page === "view" ? (
+          <ChannelViewPage key={hash} capability={channel.capability} />
         ) : (
           <ChannelWheelPage
             key={hash}

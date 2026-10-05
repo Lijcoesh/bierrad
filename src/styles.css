@@ -1482,3 +1482,8 @@ footer b {
 .channel-strip small {
   flex-basis: 100%;
 }
+.channel-view-link code,
+code.channel-view-link {
+  user-select: all;
+  overflow-wrap: anywhere;
+}
