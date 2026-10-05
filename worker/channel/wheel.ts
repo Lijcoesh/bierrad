@@ -55,6 +55,13 @@ interface Binding {
    * Absent on bindings made before the fixed link; they link per round instead.
    */
   requestCapability?: string;
+  /** Hash of the channel's view-only word link. */
+  viewerHash?: string;
+  /**
+   * Raw view-only word link, shown to request link holders so it can be typed
+   * on another screen. Absent on bindings made before it; rotation adds one.
+   */
+  viewerCapability?: string;
   defaultMinutes: number;
   createdAt: number;
   /** Idle expiry, pushed back by binding and by every round. */
@@ -78,6 +85,13 @@ export interface BindInput {
  */
 export async function channelLocator(channelId: string): Promise<string> {
   return (await hashSecret(`koffierad-channel:${channelId}`)).slice(0, 32);
+}
+/**
+ * Word links carry no locator, so each gets a pointer object named after it
+ * that only knows which channel to ask; the channel checks the hash.
+ */
+export async function channelViewerLocator(words: string): Promise<string> {
+  return (await hashSecret(`koffierad-viewer:${words}`)).slice(0, 32);
 }
 const roundErrors: Record<string, string> = {
   round_active: "☕ Er loopt al een koffieronde in dit kanaal. Klik op ☕ onder de oproep om mee te doen.",
@@ -108,8 +122,24 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
     );
   }
   private async expire() {
+    const viewer = this.read()?.viewerCapability;
     await this.ctx.storage.deleteAll();
     await this.ctx.storage.deleteAlarm();
+    if (viewer) await this.dropViewer(viewer);
+  }
+  private async addViewer(binding: Binding, viewer: string) {
+    await this.env.CHANNELS.getByName(await channelViewerLocator(viewer)).point(
+      binding.locator,
+    );
+  }
+  private async dropViewer(viewer: string) {
+    try {
+      await this.env.CHANNELS.getByName(
+        await channelViewerLocator(viewer),
+      ).unpoint();
+    } catch {
+      // A stale pointer grants nothing: the channel no longer accepts its hash.
+    }
   }
   private async arm(binding: Binding) {
     await this.ctx.storage.setAlarm(
@@ -121,6 +151,8 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
   }
   /** Rebinding replaces both links (the old ones stop working) but keeps the daily count. */
   async bind(input: BindInput, requestLink: string): Promise<void> {
+    const viewer = randomWords();
+    const viewerHash = await hashSecret(viewer);
     const env = this.slack();
     if (!loginConfigured(env)) throw new RequestError(503, "unavailable");
     const posted = await postMessage(
@@ -147,6 +179,8 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       adminHash: input.adminHash,
       requestHash: input.requestHash,
       requestCapability: input.requestCapability,
+      viewerHash,
+      viewerCapability: viewer,
       defaultMinutes: previous?.defaultMinutes ?? DEFAULT_ROUND_MINUTES,
       createdAt: now,
       expiresAt: now + CHANNEL_IDLE_TTL_MS,
@@ -156,6 +190,69 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
     };
     this.save(binding);
     await this.arm(binding);
+    await this.addViewer(binding, viewer);
+    if (stored?.viewerCapability) await this.dropViewer(stored.viewerCapability);
+  }
+  /** Pointer objects only: remember which channel a word link belongs to. */
+  async point(channel: string): Promise<void> {
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS pointer (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), channel TEXT NOT NULL)",
+    );
+    this.ctx.storage.sql.exec(
+      "INSERT OR REPLACE INTO pointer VALUES (1, ?)",
+      channel,
+    );
+  }
+  async unpoint(): Promise<void> {
+    await this.ctx.storage.deleteAll();
+  }
+  /** Pointer objects only: forwards a view-only word link, never a command. */
+  async view(words: string): Promise<Response> {
+    const row = this.ctx.storage.sql
+      .exec("SELECT name FROM sqlite_master WHERE name = 'pointer'")
+      .toArray().length
+      ? this.ctx.storage.sql
+          .exec<{ channel: string }>("SELECT channel FROM pointer WHERE singleton = 1")
+          .toArray()[0]
+      : undefined;
+    if (!row) return json({ code: "unavailable" }, 404);
+    try {
+      const response = await this.env.CHANNELS.getByName(row.channel).watch(
+        words,
+      );
+      // Replaced, unbound or expired: this pointer is useless from now on.
+      if (response.status === 404) await this.unpoint();
+      return response;
+    } catch {
+      return json({ code: "unavailable" }, 503);
+    }
+  }
+  /** All a view-only word link may see: the latest round. */
+  async watch(words: string): Promise<Response> {
+    try {
+      const hash = await hashSecret(words);
+      const binding = this.read();
+      if (!binding?.viewerHash) throw new RequestError(404, "unavailable");
+      if (Date.now() >= binding.expiresAt) {
+        await this.expire();
+        throw new RequestError(404, "unavailable");
+      }
+      if (!equalHash(hash, binding.viewerHash))
+        throw new RequestError(404, "unavailable");
+      const settled = await this.settledRoundId();
+      const current = this.read();
+      if (!current) throw new RequestError(404, "unavailable");
+      const { round } = this.status(current, "requester", Date.now(), settled);
+      return json({
+        type: "view",
+        ...(round ? { round } : {}),
+      } satisfies ChannelCommandResult);
+    } catch (error) {
+      return json(
+        { code: error instanceof RequestError ? error.code : "unavailable" },
+        error instanceof RequestError ? error.status : 503,
+      );
+    }
   }
   /** The current round's ID once its draw is over, so it no longer blocks the next. */
   private async settledRoundId(): Promise<string | undefined> {
@@ -193,6 +290,9 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
         : {}),
       roundsLeft: Math.max(0, MAX_ROUNDS_PER_DAY - used),
       expiresAt: new Date(binding.expiresAt).toISOString(),
+      ...(binding.viewerCapability
+        ? { viewerCapability: binding.viewerCapability }
+        : {}),
     };
   }
   private async authenticate(secret: string): Promise<ChannelStatus["role"]> {
@@ -211,8 +311,12 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
   async access(secret: string, command: unknown): Promise<Response> {
     try {
       // Generated before authorization so no await separates read and write below.
-      const rotated = randomHex();
-      const rotatedHash = await hashSecret(rotated);
+      const rotated = randomHex(),
+        viewer = randomWords();
+      const [rotatedHash, viewerHash] = await Promise.all([
+        hashSecret(rotated),
+        hashSecret(viewer),
+      ]);
       const role = await this.authenticate(secret);
       const settled = await this.settledRoundId();
       if (command === null) {
@@ -261,9 +365,15 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
           binding.defaultMinutes = input.minutes;
           this.save(binding);
         } else {
+          // A new channel link also replaces the word link to watch along.
+          const previousViewer = binding.viewerCapability;
           binding.requestHash = rotatedHash;
           binding.requestCapability = `${binding.locator}.${rotated}`;
+          binding.viewerHash = viewerHash;
+          binding.viewerCapability = viewer;
           this.save(binding);
+          await this.addViewer(binding, viewer);
+          if (previousViewer) await this.dropViewer(previousViewer);
           return json({
             type: "rotated",
             requestCapability: `${binding.locator}.${rotated}`,

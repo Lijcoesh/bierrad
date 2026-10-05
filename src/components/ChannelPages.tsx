@@ -5,12 +5,15 @@ import {
   ROUND_MINUTE_CHOICES,
   parseChannelInput,
   type ChannelCommand,
+  type ChannelRound,
   type ChannelStatus,
 } from "../../shared/channel";
 import {
   channelBindUrl,
+  ChannelApiError,
   channelLink,
   channelRequest,
+  channelViewLink,
   type ChannelBindFailure,
 } from "../sessions/ChannelClient";
 import { configuredApiUrl } from "../sessions/liveNavigation";
@@ -124,6 +127,7 @@ export function ChannelWheelPage({
         setGone(true);
         return result;
       }
+      if (result.type === "view") throw new ChannelApiError("unavailable");
       setStatus(result.status);
       return result;
     },
@@ -234,6 +238,12 @@ export function ChannelWheelPage({
               </span>
             )}
             {notice && <small role="status">{notice}</small>}
+            {status.viewerCapability && (
+              <small className="channel-view-link">
+                Op een ander scherm meekijken:{" "}
+                <code>{channelViewLink(status.viewerCapability)}</code>
+              </small>
+            )}
           </div>
           <ChannelLive
             key={status.round.spectatorCapability}
@@ -283,7 +293,91 @@ export function ChannelWheelPage({
         Liever vanuit Slack? Typ <code>/koffierad</code> of{" "}
         <code>/koffierad 10</code> in het kanaal.
       </p>
+      {status.viewerCapability && (
+        <p className="helper">
+          Op een ander scherm meekijken, zonder rondes te kunnen starten? Typ daar{" "}
+          <code className="channel-view-link">
+            {channelViewLink(status.viewerCapability)}
+          </code>
+        </p>
+      )}
       {admin}
+    </div>
+  );
+}
+
+/** The view-only word link: the latest round's wheel, nothing to request or manage. */
+export function ChannelViewPage({ capability }: { capability: string }) {
+  useCoffeePage("Koffierad");
+  const api = configuredApiUrl();
+  const [round, setRound] = useState<ChannelRound | null>();
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    if (!api) return;
+    let active = true;
+    const refresh = () =>
+      void channelRequest(api, capability).then(
+        (result) => {
+          if (active && result.type === "view") setRound(result.round ?? null);
+        },
+        (error: Error) => {
+          if (active && (error as { code?: string }).code === "unavailable")
+            setGone(true);
+        },
+      );
+    refresh();
+    const timer = setInterval(refresh, 10000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [api, capability]);
+  if (!api || gone)
+    return (
+      <div className="unavailable channel-page">
+        <h1>☕ Dit Koffierad is niet beschikbaar.</h1>
+        <p>
+          {gone
+            ? "Deze meekijklink is vervangen of de koppeling is opgeheven. Vraag de beheerder van het kanaal om de nieuwe link."
+            : "Live koffierondes zijn hier nog niet ingesteld."}
+        </p>
+        <a href="#/coffee">Open een lokaal Koffierad</a>
+      </div>
+    );
+  if (round === undefined)
+    return (
+      <div className="unavailable channel-page">
+        <p className="notice">Het Koffierad wordt gezet…</p>
+      </div>
+    );
+  if (round)
+    return (
+      <div className="channel-live">
+        <div className="channel-strip" aria-live="polite">
+          <strong>☕ Koffierad van dit kanaal</strong>
+          <span>
+            {round.active
+              ? `Koffieronde! Het rad draait om ${clock.format(Date.parse(round.startAt))}. Klik op ☕ onder de oproep in Slack om mee te doen.`
+              : "Typ /koffierad in het kanaal voor een nieuwe ronde."}
+          </span>
+        </div>
+        <ChannelLive
+          key={round.spectatorCapability}
+          apiUrl={api}
+          capability={round.spectatorCapability}
+        />
+      </div>
+    );
+  return (
+    <div className="unavailable channel-page" aria-live="polite">
+      <span className="friday-badge">☕ Koffierad van dit kanaal</span>
+      <h1>Tijd voor koffie?</h1>
+      <p>
+        Typ <code>/koffierad</code> in het Slack-kanaal. Zodra er een ronde is,
+        draait het rad hier vanzelf.
+      </p>
     </div>
   );
 }
@@ -351,6 +445,11 @@ function ChannelAdmin({
           Kopieer kanaallink ⧉
         </button>
       )}
+      {!status.viewerCapability && (
+        <p className="helper">
+          Maak een nieuwe kanaallink om ook een meekijklink in woorden te krijgen.
+        </p>
+      )}
       <label>
         Standaardwachttijd{" "}
         <select
@@ -375,7 +474,7 @@ function ChannelAdmin({
         onClick={() => {
           if (
             window.confirm(
-              "Een nieuwe kanaallink maken? De oude link werkt dan niet meer, ook niet als hij in Slack staat.",
+              "Een nieuwe kanaallink maken? De oude link en de oude meekijklink werken dan niet meer, ook niet als ze in Slack staan.",
             )
           )
             void act({ type: "rotateRequestLink" }, "Nieuwe kanaallink gemaakt.");
