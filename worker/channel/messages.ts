@@ -1,3 +1,5 @@
+import { channelCopy, type ChannelVariant } from "../../shared/channel";
+import { themes } from "../../shared/variant";
 import { clock } from "../slack/state";
 /**
  * Fixed Koffierad channel messages. Only server-built links and times; no
@@ -33,17 +35,20 @@ function body(
     unfurl_media: false,
   };
 }
-/** The call for a round; its own :coffee: reaction is added right after. */
+/** The call for a round; its own reaction (☕ or 💧) is added right after. */
 export function callBody(
   channelId: string,
   spectatorLink: string,
   startAt: number,
   now: number,
+  variant: ChannelVariant = "coffee",
 ) {
   const minutes = Math.max(1, Math.round((startAt - now) / 60000));
+  const theme = themes[variant],
+    round = channelCopy[variant].round;
   return body(channelId, [
     {
-      text: `☕ Koffieronde! Klik op ☕ hieronder om mee te doen.\nOver ${minutes} ${minutes === 1 ? "minuut" : "minuten"} (${clock.format(startAt)}) draait het Koffierad en kiest het één koffiehaler. `,
+      text: `${theme.icon} ${round[0].toUpperCase()}${round.slice(1)}! Klik op ${theme.icon} hieronder om mee te doen.\nOver ${minutes} ${minutes === 1 ? "minuut" : "minuten"} (${clock.format(startAt)}) draait het ${theme.name} en kiest het één ${theme.drink}haler. `,
     },
     { text: "Kijk live mee", url: spectatorLink },
   ]);
@@ -56,7 +61,7 @@ export function boundBody(channelId: string, requestLink: string) {
     },
     { text: "het vaste Koffierad van dit kanaal", url: requestLink },
     {
-      text: ": daar zie je steeds de huidige ronde en vraag je een nieuwe aan. Of typ /koffierad (of /koffierad 10 voor tien minuten). Meedoen doe je door op ☕ te klikken onder de oproep. Eerdere links van dit kanaal werken niet meer.",
+      text: ": daar zie je steeds de huidige ronde en vraag je een nieuwe aan. Of typ /koffierad of /waterrad (met bijvoorbeeld 10 erachter voor tien minuten). Meedoen doe je door op ☕ of 💧 te klikken onder de oproep. Eerdere links van dit kanaal werken niet meer.",
     },
   ]);
 }

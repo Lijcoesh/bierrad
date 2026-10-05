@@ -1,3 +1,4 @@
+import { channelCopy } from "../../shared/channel";
 import { reactionVariant, themes } from "../../shared/variant";
 import { createSession } from "../../src/domain/drawEngine";
 import type { WheelVariant } from "../../shared/variant";
@@ -140,12 +141,16 @@ export function queueChannelNotice(
     readyAt: now,
   };
 }
-const notices: Record<ChannelNotice, string> = {
-  empty:
-    "☕ Niemand deed mee aan deze koffieronde, dus het rad bleef stil. Dan maar zelf zetten!",
-  unreadable:
-    "☕ Het Koffierad kon de reacties niet lezen, dus er is niet gedraaid. Vraag gerust een nieuwe ronde aan.",
-};
+/** Channel rounds are coffee or water; the frozen reaction says which. */
+function noticeText(source: SlackSource, notice: ChannelNotice): string {
+  const variant =
+    reactionVariant(source.reactionName) === "water" ? "water" : "coffee";
+  const theme = themes[variant],
+    copy = channelCopy[variant];
+  return notice === "empty"
+    ? `${theme.icon} Niemand deed mee aan deze ${copy.round}, dus het rad bleef stil. Dan maar zelf ${copy.tap}!`
+    : `${theme.icon} Het ${theme.name} kon de reacties niet lezen, dus er is niet gedraaid. Vraag gerust een nieuwe ronde aan.`;
+}
 /** Fixed text only; the same safe posting options as results. */
 function noticeBody(source: SlackSource, text: string) {
   return {
@@ -169,7 +174,8 @@ function noticeBody(source: SlackSource, text: string) {
   };
 }
 export function resultBody(job: SlackJob) {
-  if (job.notice) return noticeBody(job.source, notices[job.notice]);
+  if (job.notice)
+    return noticeBody(job.source, noticeText(job.source, job.notice));
   const theme = themes[reactionVariant(job.source.reactionName)];
   const heading = `${theme.icon} Het rad heeft gesproken!\n`;
   const ending = `${job.names.length === 1 ? "Jij mag" : "Jullie mogen"} ${theme.drink} halen!`;

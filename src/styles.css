@@ -1521,6 +1521,23 @@ footer b {
 .channel-strip small {
   flex-basis: 100%;
 }
+[data-variant="water"] .channel-strip,
+[data-variant="water"] .channel-page code {
+  background: #d9eef3;
+}
+/* Each request button wears its own round's colours, whatever the page shows. */
+.channel-request .spin-button[data-variant="coffee"] {
+  background: #724831;
+  color: #fff8ee;
+  border-color: #593825;
+  box-shadow: 0 5px 0 #442d22;
+}
+.channel-request .spin-button[data-variant="water"] {
+  background: #1f6f8b;
+  color: #f4fbfd;
+  border-color: #185a71;
+  box-shadow: 0 5px 0 #12475a;
+}
 .channel-view-link code,
 code.channel-view-link {
   user-select: all;

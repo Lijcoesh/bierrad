@@ -1,4 +1,4 @@
-import { isWheelVariant } from "../shared/variant";
+import { isWheelVariant, themes } from "../shared/variant";
 import type { WheelVariant } from "../shared/variant";
 import type { CreatedSession } from "../shared/protocol";
 import {
@@ -24,13 +24,13 @@ import {
 } from "./auth";
 import { frontend, json, readBody, redirect } from "./http";
 import { RequestError } from "./session";
-import { validRoundMinutes } from "../shared/channel";
+import { channelCopy, validRoundMinutes } from "../shared/channel";
 import { channelLocator, channelViewerLocator } from "./channel/wheel";
 import {
   ephemeral,
   parseSlashCommand,
   readSlashBody,
-  SLASH_HELP,
+  slashHelp,
   verifySlackSignature,
 } from "./channel/slash";
 export { LiveSession } from "./live-session";
@@ -191,7 +191,7 @@ async function slackAuth(
 }
 
 /**
- * `/koffierad [minuten]` from Slack. Server-to-server: no Origin or capability,
+ * `/koffierad [minuten]` and `/waterrad [minuten]` from Slack. Server-to-server: no Origin or capability,
  * authorized solely by the Koffierad app's request signature.
  */
 async function slashCommand(
@@ -214,36 +214,38 @@ async function slashCommand(
       return json({ code: "forbidden" }, 401);
     const command = parseSlashCommand(body);
     if (command.kind === "invalid") return json({ code: "invalid" }, 400);
+    const icon = themes[command.variant].icon;
     if (command.kind === "wrongChannel")
       return ephemeral(
-        "☕ Gebruik /koffierad in een kanaal waar het Koffierad aan gekoppeld is.",
+        `${icon} Gebruik ${channelCopy[command.variant].command} in een kanaal waar het Koffierad aan gekoppeld is.`,
       );
     if (
       command.kind === "help" ||
       (command.minutes !== undefined && !validRoundMinutes(command.minutes))
     )
-      return ephemeral(SLASH_HELP);
+      return ephemeral(slashHelp(command.variant));
     const key = `slack:${command.userId}`;
     if (
       !(await env.REQUEST_LIMIT.limit({ key })).success ||
       !(await env.CREATION_LIMIT.limit({ key })).success ||
       !(await env.CREATION_GLOBAL.limit({ key: "creation" })).success
     )
-      return ephemeral("☕ Even rustig aan. Probeer het over een minuut opnieuw.");
+      return ephemeral(`${icon} Even rustig aan. Probeer het over een minuut opnieuw.`);
+    // Coffee and water share the channel's one binding and its round limits.
     const work = env.CHANNELS.getByName(
       await channelLocator(command.channelId),
-    ).slash(command.minutes, command.channelName);
+    ).slash(command.minutes, command.channelName, command.variant);
     // Slack waits about three seconds; the round continues after we answer.
     ctx.waitUntil(work.catch(() => undefined));
     const reply = await Promise.race([
       work.catch(
-        () => "☕ Het Koffierad is nu niet bereikbaar. Probeer het zo opnieuw.",
+        () => `${icon} Het Koffierad is nu niet bereikbaar. Probeer het zo opnieuw.`,
       ),
       new Promise<string>((resolve) =>
         setTimeout(
           () =>
             resolve(
-              "☕ De koffieronde wordt aangevraagd. Kijk zo in het kanaal.",
+              `${icon} De ${channelCopy[command.variant].round} wordt aangevraagd. Kijk zo in het kanaal.`,
             ),
           2500,
         ),

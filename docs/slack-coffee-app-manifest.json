@@ -1,7 +1,7 @@
 {
   "display_information": {
     "name": "Koffierad",
-    "description": "Samen draaien, samen koffie halen.",
+    "description": "Samen draaien, samen koffie en water halen.",
     "background_color": "#724831"
   },
   "features": {
@@ -14,6 +14,13 @@
         "command": "/koffierad",
         "url": "https://bierrad-live.timzegveld.workers.dev/slack/commands",
         "description": "Vraag een koffieronde aan",
+        "usage_hint": "[minuten]",
+        "should_escape": false
+      },
+      {
+        "command": "/waterrad",
+        "url": "https://bierrad-live.timzegveld.workers.dev/slack/commands",
+        "description": "Vraag een waterronde aan",
         "usage_hint": "[minuten]",
         "should_escape": false
       }

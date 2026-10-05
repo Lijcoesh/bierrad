@@ -48,8 +48,8 @@ export function channelBindUrl(apiUrl: string, channelId: string): string {
   return `${apiUrl}/auth/slack/channel/${channelId}`;
 }
 const messages: Record<string, string> = {
-  round_active: "Er loopt al een koffieronde. Kijk mee of klik op ☕ in Slack.",
-  round_limit: "Vandaag zijn er al genoeg koffierondes gestart. Morgen weer!",
+  round_active: "Er loopt al een ronde. Kijk mee of doe mee onder de oproep in Slack.",
+  round_limit: "Vandaag zijn er al genoeg rondes gestart. Morgen weer!",
   slack_post_failed:
     "Het Koffierad kon niet in het kanaal posten. Nodig de Koffierad-bot uit met /invite @Koffierad.",
   slack_uncertain:

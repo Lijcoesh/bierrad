@@ -123,6 +123,14 @@ npx wrangler secret put COFFEE_SLACK_SIGNING_SECRET --env=""
 
 3. Publiceer eerst de Worker (die bevat de nieuwe Durable Object-migratie `v2` voor `ChannelWheel`) en daarna de frontend.
 
+### Waterrondes toevoegen (`/waterrad`)
+
+Waterrondes gebruiken dezelfde Koffierad-app, dezelfde koppeling en dezelfde links; er zijn geen nieuwe secrets, scopes of migraties nodig en bestaande koppelingen hoeven niet opnieuw.
+
+1. Publiceer eerst de Worker en daarna de frontend.
+2. Werk de app bij met het [manifest](slack-coffee-app-manifest.json): nieuw is alleen het tweede slashcommando `/waterrad`, met **dezelfde** Request URL `https://bierrad-live.timzegveld.workers.dev/slack/commands`. Herinstalleer de app als Slack daarom vraagt. Wil je dat de bot in Slack niet meer "Koffierad" heet, pas dan de weergavenaam en eventueel het icoon aan ([water-icon.png](../public/water-icon.png)); dat is optioneel en verandert niets aan de werking.
+3. Test in een gekoppeld kanaal met synthetische testaccounts: `/waterrad 1` plaatst een 💧-oproep, alleen 💧 telt mee, `/koffierad` tijdens die ronde meldt dat er al een waterronde loopt, en het vaste kanaalrad kleurt blauw en daarna bij een koffieronde weer bruin.
+
 ### Per kanaal
 
 1. Nodig de bot uit in het kanaal: `/invite @Koffierad`.
@@ -131,13 +139,14 @@ npx wrangler secret put COFFEE_SLACK_SIGNING_SECRET --env=""
 
 ### Een ronde
 
-- Aanvragen via de aanvraaglink (keuze 1, 2, 3, 5, 10 of 15 minuten, standaard 5) of met `/koffierad` / `/koffierad 10` (1 tot 30 minuten) in het kanaal. Bij succes antwoordt het slashcommando niet (de oproep is de bevestiging); foutmeldingen zie alleen jij.
-- De bot plaatst een oproep in het kanaal met een "Kijk live mee"-link naar de meekijklink in woorden (bij oudere koppelingen het vaste kanaalrad) en zet er direct een ☕ onder. Collega's klikken die ☕ aan. De botreactie telt nooit mee: de bot wordt op gebruikers-ID én als bot uitgefilterd.
+- Aanvragen via de aanvraaglink (keuze 1, 2, 3, 5, 10 of 15 minuten, standaard 5, met een knop voor een koffie- en een waterronde) of met `/koffierad` / `/koffierad 10` of `/waterrad` / `/waterrad 10` (1 tot 30 minuten) in het kanaal. Bij succes antwoordt het slashcommando niet (de oproep is de bevestiging); foutmeldingen zie alleen jij.
+- De bot plaatst een oproep in het kanaal met een "Kijk live mee"-link naar de meekijklink in woorden (bij oudere koppelingen het vaste kanaalrad) en zet er direct een ☕ (waterronde: 💧) onder. Collega's klikken die aan; een ronde telt uitsluitend haar eigen reactie. De botreactie telt nooit mee: de bot wordt op gebruikers-ID én als bot uitgefilterd.
 - Elke minuut leest de server de reacties, zodat kijkers het rad zien vollopen. Vlak voor de start volgt de normale eindcontrole. Daarna draait het rad met precies één winnaar, die met @vermelding in de thread van de oproep wordt gemeld en daarbij ook in het kanaal verschijnt (zoals het vinkje "Ook naar kanaal sturen"). Zonder deelnemers, of als de reacties niet te lezen zijn, plaatst de bot daar een vaste melding.
-- Per kanaal loopt er hooguit één ronde tegelijk, met maximaal 20 rondes per 24 uur. Zodra het rad is gestopt (of de ronde niet doorging), kan direct een nieuwe ronde worden aangevraagd. Er wordt niet vermeld wie de ronde aanvroeg.
+- Het vaste kanaalrad en de meekijklink nemen het thema van de ronde over: bruin bij koffie, blauw bij water. Zonder lopende ronde blijft het thema van de laatste ronde staan.
+- Per kanaal loopt er hooguit één ronde tegelijk, koffie of water, met samen maximaal 25 rondes per 24 uur. Zodra het rad is gestopt (of de ronde niet doorging), kan direct een nieuwe ronde worden aangevraagd. Er wordt niet vermeld wie de ronde aanvroeg.
 
 ### Beheer en intrekken
 
-Op de beheerpagina kun je de standaardwachttijd kiezen, een nieuwe aanvraaglink maken (de oude, ook die in Slack, werkt dan niet meer) en ontkoppelen. Een koppeling verloopt vanzelf na 90 dagen zonder rondes. Intrekken voor alle kanalen: verwijder `COFFEE_SLACK_SIGNING_SECRET` (alleen het slashcommando) of `COFFEE_SLACK_CLIENT_SECRET`/`COFFEE_SLACK_BOT_TOKEN` (alles van het Koffierad).
+Op de beheerpagina kun je de standaardwachttijd kiezen, een nieuwe aanvraaglink maken (de oude, ook die in Slack, werkt dan niet meer) en ontkoppelen. Een koppeling verloopt vanzelf na 90 dagen zonder rondes. Intrekken voor alle kanalen: verwijder `COFFEE_SLACK_SIGNING_SECRET` (alleen de slashcommando's `/koffierad` en `/waterrad`) of `COFFEE_SLACK_CLIENT_SECRET`/`COFFEE_SLACK_BOT_TOKEN` (alles van het Koffierad, ook water).
 
 Beperkingen: de aanvraaglink is bearer-toegang. Wie hem heeft, kan rondes starten en meekijken, ook buiten het kanaal als hij wordt doorgestuurd. De bot heeft geen `channels:read`, dus de beheerpagina toont geen kanaalnaam. Een onzekere Slack-post bij het aanvragen wordt niet herhaald: controleer dan het kanaal. Test na installatie met synthetische testaccounts dat de botreactie niet meetelt, `/koffierad` in een niet-gekoppeld kanaal een uitleg geeft en precies één threaduitslag verschijnt.
