@@ -25,6 +25,10 @@ const clock = new Intl.DateTimeFormat("nl-NL", {
   hour: "2-digit",
   minute: "2-digit",
 });
+/** The name arrives with the first `/koffierad`; until then, no name. */
+function channelTitle(name?: string) {
+  return name ? `☕ Koffierad van #${name}` : "☕ Koffierad van dit kanaal";
+}
 function useCoffeePage(title: string) {
   useEffect(() => {
     document.documentElement.dataset.variant = "coffee";
@@ -205,7 +209,7 @@ export function ChannelWheelPage({
       <>
         <div className="channel-live">
           <div className="channel-strip" aria-live="polite">
-            <strong>☕ Koffierad van dit kanaal</strong>
+            <strong>{channelTitle(status.channelName)}</strong>
             {status.round.active ? (
               <span>
                 Koffieronde! Het rad draait om{" "}
@@ -256,7 +260,7 @@ export function ChannelWheelPage({
     );
   return (
     <div className="unavailable channel-page">
-      <span className="friday-badge">☕ Koffierad van dit kanaal</span>
+      <span className="friday-badge">{channelTitle(status.channelName)}</span>
       <h1>Tijd voor koffie?</h1>
       <section className="channel-request">
         <p>
@@ -311,6 +315,7 @@ export function ChannelViewPage({ capability }: { capability: string }) {
   useCoffeePage("Koffierad");
   const api = configuredApiUrl();
   const [round, setRound] = useState<ChannelRound | null>();
+  const [channelName, setChannelName] = useState<string>();
   const [gone, setGone] = useState(false);
   useEffect(() => {
     if (!api) return;
@@ -318,7 +323,10 @@ export function ChannelViewPage({ capability }: { capability: string }) {
     const refresh = () =>
       void channelRequest(api, capability).then(
         (result) => {
-          if (active && result.type === "view") setRound(result.round ?? null);
+          if (active && result.type === "view") {
+            setRound(result.round ?? null);
+            setChannelName(result.channelName);
+          }
         },
         (error: Error) => {
           if (active && (error as { code?: string }).code === "unavailable")
@@ -356,7 +364,7 @@ export function ChannelViewPage({ capability }: { capability: string }) {
     return (
       <div className="channel-live">
         <div className="channel-strip" aria-live="polite">
-          <strong>☕ Koffierad van dit kanaal</strong>
+          <strong>{channelTitle(channelName)}</strong>
           <span>
             {round.active
               ? `Koffieronde! Het rad draait om ${clock.format(Date.parse(round.startAt))}. Klik op ☕ onder de oproep in Slack om mee te doen.`
@@ -372,7 +380,7 @@ export function ChannelViewPage({ capability }: { capability: string }) {
     );
   return (
     <div className="unavailable channel-page" aria-live="polite">
-      <span className="friday-badge">☕ Koffierad van dit kanaal</span>
+      <span className="friday-badge">{channelTitle(channelName)}</span>
       <h1>Tijd voor koffie?</h1>
       <p>
         Typ <code>/koffierad</code> in het Slack-kanaal. Zodra er een ronde is,

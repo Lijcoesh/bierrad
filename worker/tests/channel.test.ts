@@ -69,6 +69,11 @@ test("slash command text is strict: minutes, help or nothing", () => {
     parseSlashCommand(slashBody({}) + "&channel_id=C00000002").kind,
     "invalid",
   );
+  // The channel name is display only: kept when it looks like a Slack name, dropped otherwise.
+  assert.equal((parse({ channel_name: "koffie-3e_etage" }) as { channelName?: string }).channelName, "koffie-3e_etage");
+  assert.equal((parse({ channel_name: "koffie", text: "5" }) as { channelName?: string }).channelName, "koffie");
+  for (const name of ["", "Koffie", "<b>x</b>", "privategroup", "directmessage", "mpdm-a--b-1", "a".repeat(81), "naam met spatie"])
+    assert.equal((parse({ channel_name: name }) as { channelName?: string }).channelName, undefined, name);
 });
 
 test("channel input accepts only Slack channel IDs and links", () => {
@@ -467,9 +472,13 @@ test(
       assert.equal(landed?.active, false);
       assert.equal(landed?.spectatorCapability, viewer);
       // Success is silent: an empty 200 shows nothing; the call itself confirms.
-      const reply = await slash({ text: "2" });
+      assert.equal(((await status(requester)) as { status: { channelName?: string } }).status.channelName, undefined);
+      const reply = await slash({ text: "2", channel_name: "koffiehoek" });
       assert.equal(reply.status, 200);
       assert.equal(await reply.text(), "");
+      // Slack's signed channel name is now shown to link holders and the word link.
+      assert.equal(((await status(requester)) as { status: { channelName?: string } }).status.channelName, "koffiehoek");
+      assert.equal(((await status(watcher)) as { channelName?: string }).channelName, "koffiehoek");
       assert.equal(posts.at(-1)!.channel, "C00000001");
       assert.equal(reactionsAdded.length, 2);
       // The new round replaced the old raw spectator link; after its window the next one is wiped too.

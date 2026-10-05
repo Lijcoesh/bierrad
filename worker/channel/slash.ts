@@ -85,7 +85,23 @@ export type SlashRequest =
   | { kind: "help" }
   | { kind: "invalid" }
   | { kind: "wrongChannel" }
-  | { kind: "round"; channelId: string; userId: string; minutes?: number };
+  | {
+      kind: "round";
+      channelId: string;
+      userId: string;
+      minutes?: number;
+      /** Signed by Slack like everything else; only shown, never authorizes. */
+      channelName?: string;
+    };
+/** Slack channel names: lowercase letters, digits, `-`, `_` and `.`, at most 80. */
+export function validChannelName(name: string | undefined): string | undefined {
+  return name &&
+    /^[a-z0-9][a-z0-9._-]{0,79}$/.test(name) &&
+    !["privategroup", "directmessage"].includes(name) &&
+    !name.startsWith("mpdm-")
+    ? name
+    : undefined;
+}
 export function parseSlashCommand(body: string): SlashRequest {
   const params = new URLSearchParams(body);
   const one = (key: string) =>
@@ -104,11 +120,16 @@ export function parseSlashCommand(body: string): SlashRequest {
     return { kind: "invalid" };
   if (!/^[CG][A-Z0-9]{8,20}$/.test(channelId)) return { kind: "wrongChannel" };
   if (/^(help|hulp|\?)$/i.test(text)) return { kind: "help" };
-  if (!text) return { kind: "round", channelId, userId };
+  const channelName = validChannelName(one("channel_name"));
+  const round = {
+    kind: "round",
+    channelId,
+    userId,
+    ...(channelName ? { channelName } : {}),
+  } as const;
+  if (!text) return round;
   const match = /^(\d{1,2})\s*(m|min|minuut|minuten)?$/i.exec(text);
-  return match
-    ? { kind: "round", channelId, userId, minutes: Number(match[1]) }
-    : { kind: "help" };
+  return match ? { ...round, minutes: Number(match[1]) } : { kind: "help" };
 }
 /** Only the person who typed the command sees this reply. */
 export function ephemeral(text: string): Response {

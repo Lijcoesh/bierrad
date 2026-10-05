@@ -24,6 +24,8 @@ export interface ChannelStatus {
   expiresAt: string;
   /** View-only word link of the channel, easy to type on another screen. */
   viewerCapability?: string;
+  /** Channel name from the last signed `/koffierad`, without `#`; display only. */
+  channelName?: string;
 }
 export type ChannelCommand =
   | { type: "requestRound"; minutes: number }
@@ -35,7 +37,7 @@ export type ChannelCommandResult =
   | { type: "rotated"; requestCapability: string; status: ChannelStatus }
   | { type: "unbound" }
   /** All a view-only word link gets: the latest round, no commands. */
-  | { type: "view"; round?: ChannelRound };
+  | { type: "view"; channelName?: string; round?: ChannelRound };
 
 export function validRoundMinutes(value: unknown): value is number {
   return (
