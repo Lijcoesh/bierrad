@@ -1,5 +1,5 @@
 import { useTheme } from "./Theme";
-import { localHash } from "../shared/variant";
+import { localHash, themes, wheelVariants } from "../shared/variant";
 import { SlackControls, SlackResultStatus } from "./components/SlackControls";
 import { ScheduleControls } from "./components/ScheduleControls";
 import { formatScheduledTime } from "./utils/schedule";
@@ -98,7 +98,7 @@ export default function App({ controller }: { controller: SessionController }) {
       </header>
       {!live && (
         <nav className="variant-switch" aria-label="Kies je rad">
-          {(["beer", "coffee"] as const).map((variant) => (
+          {wheelVariants.map((variant) => (
             <a
               key={variant}
               href={localHash(variant)}
@@ -108,7 +108,7 @@ export default function App({ controller }: { controller: SessionController }) {
               }}
               aria-disabled={spinning}
             >
-              {variant === "beer" ? "🍻 Bierrad" : "☕ Koffierad"}
+              {themes[variant].icon} {themes[variant].name}
             </a>
           ))}
         </nav>

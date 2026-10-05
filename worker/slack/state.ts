@@ -1,4 +1,5 @@
-import { themes } from "../../shared/variant";
+import { channelCopy } from "../../shared/channel";
+import { reactionVariant, themes } from "../../shared/variant";
 import { createSession } from "../../src/domain/drawEngine";
 import type { WheelVariant } from "../../shared/variant";
 import type { SlackReminderStatus } from "../../shared/protocol";
@@ -15,6 +16,8 @@ export interface SlackJob {
   mentionIds?: (string | null)[];
   /** Channel rounds without a draw: a fixed notice instead of winners. */
   notice?: ChannelNotice;
+  /** Channel round winners are also sent to the channel ("Also send to"). */
+  broadcast?: boolean;
   status: "pending" | "posting" | "posted" | "failed" | "uncertain";
   readyAt: number;
   attemptedAt?: number;
@@ -114,6 +117,7 @@ export function queueResult(record: StoredSession) {
         record.session.participants.find((p) => p.id === spin.winnerId)!.name,
     ),
     mentionIds: draw.spins.map((spin) => identities.get(spin.winnerId) ?? null),
+    ...(slack.channelRound ? { broadcast: true } : {}),
     status: "pending",
     readyAt: Math.max(
       ...draw.spins.map((s) => Date.parse(s.startAt) + s.durationMs),
@@ -137,12 +141,16 @@ export function queueChannelNotice(
     readyAt: now,
   };
 }
-const notices: Record<ChannelNotice, string> = {
-  empty:
-    "☕ Niemand deed mee aan deze koffieronde, dus het rad bleef stil. Dan maar zelf zetten!",
-  unreadable:
-    "☕ Het Koffierad kon de reacties niet lezen, dus er is niet gedraaid. Vraag gerust een nieuwe ronde aan.",
-};
+/** Channel rounds are coffee or water; the frozen reaction says which. */
+function noticeText(source: SlackSource, notice: ChannelNotice): string {
+  const variant =
+    reactionVariant(source.reactionName) === "water" ? "water" : "coffee";
+  const theme = themes[variant],
+    copy = channelCopy[variant];
+  return notice === "empty"
+    ? `${theme.icon} Niemand deed mee aan deze ${copy.round}, dus het rad bleef stil. Dan maar zelf ${copy.tap}!`
+    : `${theme.icon} Het ${theme.name} kon de reacties niet lezen, dus er is niet gedraaid. Vraag gerust een nieuwe ronde aan.`;
+}
 /** Fixed text only; the same safe posting options as results. */
 function noticeBody(source: SlackSource, text: string) {
   return {
@@ -166,9 +174,9 @@ function noticeBody(source: SlackSource, text: string) {
   };
 }
 export function resultBody(job: SlackJob) {
-  if (job.notice) return noticeBody(job.source, notices[job.notice]);
-  const theme =
-    themes[job.source.reactionName === "coffee" ? "coffee" : "beer"];
+  if (job.notice)
+    return noticeBody(job.source, noticeText(job.source, job.notice));
+  const theme = themes[reactionVariant(job.source.reactionName)];
   const heading = `${theme.icon} Het rad heeft gesproken!\n`;
   const ending = `${job.names.length === 1 ? "Jij mag" : "Jullie mogen"} ${theme.drink} halen!`;
   const text = `${heading}${job.names.join(" · ")}\n${ending}`;
@@ -207,7 +215,8 @@ export function resultBody(job: SlackJob) {
     mrkdwn: false,
     parse: "none",
     link_names: false,
-    reply_broadcast: false,
+    // Only the winners of a channel round; never notices or Bierrad results.
+    reply_broadcast: job.broadcast === true,
     unfurl_links: false,
     unfurl_media: false,
   };

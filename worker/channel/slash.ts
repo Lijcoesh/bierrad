@@ -1,10 +1,18 @@
+import {
+  channelCopy,
+  channelVariants,
+  type ChannelVariant,
+} from "../../shared/channel";
+import { themes } from "../../shared/variant";
 import { equalHash, hashSecret } from "../auth";
 /**
- * `/koffierad` slash commands. Slack signs every request with the Koffierad
- * app's signing secret; the signature is the only authorization.
+ * `/koffierad` and `/waterrad` slash commands. Both belong to the Koffierad
+ * app: Slack signs every request with its signing secret, the only authorization.
  * https://docs.slack.dev/authentication/verifying-requests-from-slack/
  */
-export const SLASH_COMMAND = "/koffierad";
+function commandVariant(command: string | undefined): ChannelVariant | undefined {
+  return channelVariants.find((v) => channelCopy[v].command === command);
+}
 const MAX_BODY_BYTES = 8192;
 const MAX_SKEW_S = 300;
 
@@ -82,10 +90,27 @@ export async function verifySlackSignature(
   return equalHash(await hashSecret(expected), await hashSecret(signature));
 }
 export type SlashRequest =
-  | { kind: "help" }
+  | { kind: "help"; variant: ChannelVariant }
   | { kind: "invalid" }
-  | { kind: "wrongChannel" }
-  | { kind: "round"; channelId: string; userId: string; minutes?: number };
+  | { kind: "wrongChannel"; variant: ChannelVariant }
+  | {
+      kind: "round";
+      variant: ChannelVariant;
+      channelId: string;
+      userId: string;
+      minutes?: number;
+      /** Signed by Slack like everything else; only shown, never authorizes. */
+      channelName?: string;
+    };
+/** Slack channel names: lowercase letters, digits, `-`, `_` and `.`, at most 80. */
+export function validChannelName(name: string | undefined): string | undefined {
+  return name &&
+    /^[a-z0-9][a-z0-9._-]{0,79}$/.test(name) &&
+    !["privategroup", "directmessage"].includes(name) &&
+    !name.startsWith("mpdm-")
+    ? name
+    : undefined;
+}
 export function parseSlashCommand(body: string): SlashRequest {
   const params = new URLSearchParams(body);
   const one = (key: string) =>
@@ -93,8 +118,9 @@ export function parseSlashCommand(body: string): SlashRequest {
   const userId = one("user_id");
   const channelId = one("channel_id");
   const text = (one("text") ?? "").trim();
+  const variant = commandVariant(one("command"));
   if (
-    one("command") !== SLASH_COMMAND ||
+    !variant ||
     !userId ||
     !/^[UW][A-Z0-9]{8,20}$/.test(userId) ||
     !channelId ||
@@ -102,13 +128,22 @@ export function parseSlashCommand(body: string): SlashRequest {
     text.length > 32
   )
     return { kind: "invalid" };
-  if (!/^[CG][A-Z0-9]{8,20}$/.test(channelId)) return { kind: "wrongChannel" };
-  if (/^(help|hulp|\?)$/i.test(text)) return { kind: "help" };
-  if (!text) return { kind: "round", channelId, userId };
+  if (!/^[CG][A-Z0-9]{8,20}$/.test(channelId))
+    return { kind: "wrongChannel", variant };
+  if (/^(help|hulp|\?)$/i.test(text)) return { kind: "help", variant };
+  const channelName = validChannelName(one("channel_name"));
+  const round = {
+    kind: "round",
+    variant,
+    channelId,
+    userId,
+    ...(channelName ? { channelName } : {}),
+  } as const;
+  if (!text) return round;
   const match = /^(\d{1,2})\s*(m|min|minuut|minuten)?$/i.exec(text);
   return match
-    ? { kind: "round", channelId, userId, minutes: Number(match[1]) }
-    : { kind: "help" };
+    ? { ...round, minutes: Number(match[1]) }
+    : { kind: "help", variant };
 }
 /** Only the person who typed the command sees this reply. */
 export function ephemeral(text: string): Response {
@@ -122,5 +157,7 @@ export function ephemeral(text: string): Response {
     },
   );
 }
-export const SLASH_HELP =
-  "☕ Gebruik `/koffierad` om een koffieronde te starten met de standaardwachttijd van dit kanaal, of `/koffierad 10` om het rad na 1 tot 30 minuten te laten draaien.";
+export function slashHelp(variant: ChannelVariant): string {
+  const { command, round } = channelCopy[variant];
+  return `${themes[variant].icon} Gebruik \`${command}\` om een ${round} te starten met de standaardwachttijd van dit kanaal, of \`${command} 10\` om het rad na 1 tot 30 minuten te laten draaien.`;
+}

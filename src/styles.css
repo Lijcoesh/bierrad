@@ -961,6 +961,37 @@ footer b {
 [data-variant="coffee"] .count-stepper {
   background: #ecddc9;
 }
+:root[data-variant="water"] {
+  color: #183b47;
+  background: #eef7f9;
+}
+[data-variant="water"] .primary {
+  background: #1f6f8b;
+  color: #f4fbfd;
+  border-color: #185a71;
+  box-shadow: 0 5px 0 #12475a;
+}
+[data-variant="water"] .primary:hover:not(:disabled) {
+  background: #2a809e;
+}
+[data-variant="water"] .friday-badge {
+  background: #d6ecf1;
+  border-color: #b5d9e3;
+}
+[data-variant="water"] .wheel-hub {
+  background: #f4fbfd;
+}
+[data-variant="water"] .variant-switch a[aria-current="page"] {
+  background: #1f6f8b;
+}
+[data-variant="water"] .final-result {
+  background: #dcf0f5;
+  border-color: #8cc4d4;
+}
+[data-variant="water"] .count,
+[data-variant="water"] .count-stepper {
+  background: #d9eef3;
+}
 
 .schedule-controls {
   margin-top: 16px;
@@ -1311,6 +1342,14 @@ footer b {
 [data-variant="coffee"] .participant-drawer-panel {
   background: #fff8ee;
 }
+[data-variant="water"] .spectator .wheel-grid .wheel-reveal.revealed {
+  background: #7cc6d9;
+  color: #183b47;
+}
+[data-variant="water"] .participant-drawer > button,
+[data-variant="water"] .participant-drawer-panel {
+  background: #f7fcfd;
+}
 @keyframes count-pop {
   from {
     transform: scale(1.3);
@@ -1481,6 +1520,23 @@ footer b {
 }
 .channel-strip small {
   flex-basis: 100%;
+}
+[data-variant="water"] .channel-strip,
+[data-variant="water"] .channel-page code {
+  background: #d9eef3;
+}
+/* Each request button wears its own round's colours, whatever the page shows. */
+.channel-request .spin-button[data-variant="coffee"] {
+  background: #724831;
+  color: #fff8ee;
+  border-color: #593825;
+  box-shadow: 0 5px 0 #442d22;
+}
+.channel-request .spin-button[data-variant="water"] {
+  background: #1f6f8b;
+  color: #f4fbfd;
+  border-color: #185a71;
+  box-shadow: 0 5px 0 #12475a;
 }
 .channel-view-link code,
 code.channel-view-link {

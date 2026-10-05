@@ -82,3 +82,74 @@ test("coffee setup, finale and Slack controls consistently say coffee halen", as
   assert.doesNotMatch(slack, /:beers:|🍻/);
   controller.dispose();
 });
+test("local routes, reactions and Slack apps come from one theme table", async () => {
+  const { localHash, localVariant, reactionVariant, themes, wheelVariants } =
+    await import("../../shared/variant");
+  assert.equal(localVariant(""), "beer");
+  for (const variant of wheelVariants) {
+    assert.equal(localVariant(localHash(variant)), variant);
+    assert.equal(reactionVariant(themes[variant].reaction), variant);
+  }
+  for (const hash of ["#/slack", "#/live/x", "#/koffie-koppelen", "#/Coffee", "#/beer/"])
+    assert.equal(localVariant(hash), undefined, hash);
+  assert.equal(themes.beer.slackApp, "beer");
+  assert.equal(themes.coffee.slackApp, "coffee");
+});
+test("water setup, finale and Slack controls say water halen and count only :droplet:", async () => {
+  const controller = new LocalSessionController();
+  await controller.setParticipants([{ id: "a", name: "Test A" }]);
+  const render = (child: import("react").ReactNode) =>
+    renderToStaticMarkup(
+      createElement(VariantContext.Provider, { value: "water" }, child),
+    );
+  const setup = render(createElement(App, { controller }));
+  assert.match(setup, /Waterrad/);
+  assert.match(setup, /waterhaler/);
+  assert.match(setup, /DRAAI HET WATERRAD/);
+  assert.doesNotMatch(setup, /bierhaler|koffiehaler|Vrijdag begint|bier halen/i);
+  const result = render(
+    createElement(FinalResult, {
+      winners: [{ id: "a", name: "Test A" }],
+      onAgain() {},
+      onSetup() {},
+      canControl: true,
+      disabled: false,
+    }),
+  );
+  assert.match(result, /Jij mag water halen!/);
+  assert.match(result, /Rondje gemeentepils van de zaak! Hydrateer ons trots\./);
+  assert.doesNotMatch(result, /bier|koffie/i);
+  const slack = render(
+    createElement(SlackControls, {
+      status: { enabled: true, source: "slack", importing: false, count: 0 },
+      locked: false,
+      async onImport() {},
+      async onManual() {},
+    }),
+  );
+  assert.match(slack, /:droplet:/);
+  assert.doesNotMatch(slack, /:beers:|:coffee:/);
+  controller.dispose();
+});
+test("water roster and count are stored apart from beer and coffee", () => {
+  const data = new Map<string, string>();
+  const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => data.set(k, v),
+    },
+  });
+  try {
+    new ManualParticipantSource("water").save([{ id: "w", name: "Test W" }]);
+    new LocalWinnerCountPreference("water").save(1);
+    assert.deepEqual([...data.keys()].sort(), [
+      "waterrad.participants.v1",
+      "waterrad.winnerCount.v1",
+    ]);
+  } finally {
+    if (original) Object.defineProperty(globalThis, "localStorage", original);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  }
+});

@@ -48,7 +48,7 @@ test("channel client sends the capability only as a bearer header, never stores 
     seen.push({ url: String(url), init: init! });
     return Response.json({
       type: "status",
-      status: { role: "requester", defaultMinutes: 5, roundsLeft: 20, expiresAt: "2027-01-01T00:00:00.000Z" },
+      status: { role: "requester", defaultMinutes: 5, roundsLeft: 25, expiresAt: "2027-01-01T00:00:00.000Z" },
     });
   }) as typeof fetch;
   const result = await channelRequest("https://api.example.test", cap, { type: "requestRound", minutes: 5 }, fetcher);
@@ -66,7 +66,7 @@ test("channel errors become friendly Dutch messages without server details", asy
     (async () => Response.json(body, { status })) as unknown as typeof fetch;
   await assert.rejects(
     channelRequest("https://api.example.test", cap, undefined, failing(409, { code: "round_active" })),
-    (e: unknown) => e instanceof ChannelApiError && e.code === "round_active" && /koffieronde/.test(e.message),
+    (e: unknown) => e instanceof ChannelApiError && e.code === "round_active" && /loopt al een ronde/.test(e.message),
   );
   await assert.rejects(
     channelRequest("https://api.example.test", cap, undefined, failing(500, { stack: "secret" })),

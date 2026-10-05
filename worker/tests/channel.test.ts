@@ -56,7 +56,18 @@ test("slash requests need a fresh signature over the exact body", async () => {
 
 test("slash command text is strict: minutes, help or nothing", () => {
   const parse = (fields: Record<string, string>) => parseSlashCommand(slashBody(fields));
-  assert.deepEqual(parse({}), { kind: "round", channelId: "C00000001", userId: "U00000001" });
+  assert.deepEqual(parse({}), { kind: "round", variant: "coffee", channelId: "C00000001", userId: "U00000001" });
+  // /waterrad belongs to the same app and binding; only the variant differs.
+  assert.deepEqual(parse({ command: "/waterrad", text: "10" }), {
+    kind: "round",
+    variant: "water",
+    channelId: "C00000001",
+    userId: "U00000001",
+    minutes: 10,
+  });
+  assert.deepEqual(parse({ command: "/waterrad", text: "hulp" }), { kind: "help", variant: "water" });
+  assert.equal(parse({ command: "/Waterrad" }).kind, "invalid");
+  assert.equal(parse({ command: "/waterrad", channel_id: "D00000001" }).kind, "wrongChannel");
   assert.equal((parse({ text: "10" }) as { minutes: number }).minutes, 10);
   assert.equal((parse({ text: " 7 min " }) as { minutes: number }).minutes, 7);
   assert.equal(parse({ text: "help" }).kind, "help");
@@ -69,6 +80,11 @@ test("slash command text is strict: minutes, help or nothing", () => {
     parseSlashCommand(slashBody({}) + "&channel_id=C00000002").kind,
     "invalid",
   );
+  // The channel name is display only: kept when it looks like a Slack name, dropped otherwise.
+  assert.equal((parse({ channel_name: "koffie-3e_etage" }) as { channelName?: string }).channelName, "koffie-3e_etage");
+  assert.equal((parse({ channel_name: "koffie", text: "5" }) as { channelName?: string }).channelName, "koffie");
+  for (const name of ["", "Koffie", "<b>x</b>", "privategroup", "directmessage", "mpdm-a--b-1", "a".repeat(81), "naam met spatie"])
+    assert.equal((parse({ channel_name: name }) as { channelName?: string }).channelName, undefined, name);
 });
 
 test("channel input accepts only Slack channel IDs and links", () => {
@@ -104,8 +120,14 @@ test("channel messages are fixed text with server-built links, never broadcast o
     url: link,
     text: "Kijk live mee",
   });
+  const water = callBody("C00000001", link, now + 60000, now, "water");
+  assert.match(water.text, /^💧 Waterronde! Klik op 💧 hieronder .*\nOver 1 minuut \(10:01\) draait het Waterrad en kiest het één waterhaler\./);
+  assert.doesNotMatch(water.text, /☕|koffie/i);
+  assert.equal(water.unfurl_links, false);
+  assert.equal("reply_broadcast" in water, false);
   const bound = boundBody("C00000001", "https://example.test/#/koffie/abc");
   assert.match(bound.text, /\/koffierad/);
+  assert.match(bound.text, /\/waterrad/);
 });
 
 test("channel rounds close their thread when nobody joins or reactions cannot be read", () => {
@@ -133,6 +155,16 @@ test("channel rounds close their thread when nobody joins or reactions cannot be
   assert.equal(r.slack!.job, undefined);
   queueChannelNotice(r, "empty", now);
   assert.equal(r.slack!.job, undefined);
+  // A water round's notices speak of water, from its frozen reaction.
+  r = round();
+  r.variant = "water";
+  r.slack!.source = { ...source, reactionName: "droplet" };
+  executeScheduledDraw(r, now, true);
+  assert.equal(resultBody(r.slack!.job!).text, "💧 Niemand deed mee aan deze waterronde, dus het rad bleef stil. Dan maar zelf tappen!");
+  r = round();
+  r.slack!.source = { ...source, reactionName: "droplet" };
+  executeScheduledDraw(r, now, false);
+  assert.match(resultBody(r.slack!.job!).text, /^💧 Het Waterrad kon de reacties niet lezen/);
 });
 
 test("channel rounds refresh themselves, but never close to the final check", () => {
@@ -195,6 +227,7 @@ test(
     const reactionsAdded: Record<string, unknown>[] = [];
     const userLookups: string[] = [];
     const reactors = ["UBOT00001", "U00000001", "U00000002"];
+    const drinkers = ["UBOT00001", "U00000003"];
     const mf = new Miniflare(
       convertV4MiniflareOptions({
         workers: [
@@ -276,7 +309,11 @@ test(
                   channel: "C00000001",
                   message: {
                     ts: url.searchParams.get("timestamp"),
-                    reactions: [{ name: "coffee", count: reactors.length, users: reactors }],
+                    reactions: [
+                      { name: "coffee", count: reactors.length, users: reactors },
+                      // Only water rounds count these; coffee rounds ignore them.
+                      { name: "droplet", count: drinkers.length, users: drinkers },
+                    ],
                   },
                 });
               assert.equal(path, "chat.postMessage");
@@ -372,12 +409,12 @@ test(
       assert.match(watcher, /^[a-z]{2,8}(?:-[a-z]{2,8}){4}$/);
       assert.deepEqual(
         { ...initial, expiresAt: undefined, viewerCapability: undefined },
-        { role: "requester", defaultMinutes: 5, roundsLeft: 20, expiresAt: undefined, viewerCapability: undefined },
+        { role: "requester", variant: "coffee", defaultMinutes: 5, roundsLeft: 25, expiresAt: undefined, viewerCapability: undefined },
       );
-      // The word link is never posted and only stored as a hash and a raw copy for link holders.
+      // The confirmation carries only the request link, not the word link.
       assert.ok(!JSON.stringify(posts).includes(watcher));
       // It only watches: no round yet, no settings, no commands of any kind.
-      assert.deepEqual(await status(watcher), { type: "view" });
+      assert.deepEqual(await status(watcher), { type: "view", variant: "coffee" });
       for (const command of [{ type: "requestRound", minutes: 5 }, { type: "unbind" }, { type: "rotateRequestLink" }])
         assert.equal((await api(watcher, command)).status, 405);
       assert.ok(Date.parse(String(initial.expiresAt)) > Date.now() + 89 * 24 * 3600000);
@@ -398,13 +435,16 @@ test(
       const call = posts.at(-1)!;
       assert.equal(call.channel, "C00000001");
       assert.equal(call.thread_ts, undefined);
-      // The call links to the fixed channel page, not to a per-round link.
-      assert.ok(JSON.stringify(call.blocks).includes(`"url":"http://127.0.0.1:5173/#/koffie/${requester}"`));
+      // "Kijk live mee" links to the view-only word link (requested by the owner):
+      // never the request link, never a per-round link.
+      assert.ok(JSON.stringify(call.blocks).includes(`"url":"http://127.0.0.1:5173/#/koffie/${watcher}"`));
+      assert.ok(!JSON.stringify(call).includes(requester.split(".")[1]));
       assert.ok(!JSON.stringify(call).includes(round.spectatorCapability));
       assert.equal(round.active, true);
-      assert.ok(!JSON.stringify(call).includes(watcher));
+      // Requests without a variant stay coffee, as before water existed.
+      assert.equal((round as { variant?: string }).variant, "coffee");
       // The word link sees the same round and nothing more.
-      assert.deepEqual(await status(watcher), { type: "view", round });
+      assert.deepEqual(await status(watcher), { type: "view", variant: "coffee", round });
       // No DTO ever returns the stored request link.
       assert.ok(!JSON.stringify(started).includes(requester.split(".")[1]));
       assert.ok(!JSON.stringify(await status(admin)).includes(requester.split(".")[1]));
@@ -452,7 +492,8 @@ test(
       await session.postNow();
       const result = posts.at(-1)!;
       assert.equal(result.thread_ts, callTs);
-      assert.equal(result.reply_broadcast, false);
+      // The winner is also sent to the channel, as a thread reply ("Also send to").
+      assert.equal(result.reply_broadcast, true);
       assert.match(String(result.text), /Jij mag koffie halen!/);
       assert.ok(/"user_id":"U0000000[12]"/.test(JSON.stringify(result.blocks)));
 
@@ -465,9 +506,13 @@ test(
       assert.equal(landed?.active, false);
       assert.equal(landed?.spectatorCapability, viewer);
       // Success is silent: an empty 200 shows nothing; the call itself confirms.
-      const reply = await slash({ text: "2" });
+      assert.equal(((await status(requester)) as { status: { channelName?: string } }).status.channelName, undefined);
+      const reply = await slash({ text: "2", channel_name: "koffiehoek" });
       assert.equal(reply.status, 200);
       assert.equal(await reply.text(), "");
+      // Slack's signed channel name is now shown to link holders and the word link.
+      assert.equal(((await status(requester)) as { status: { channelName?: string } }).status.channelName, "koffiehoek");
+      assert.equal(((await status(watcher)) as { channelName?: string }).channelName, "koffiehoek");
       assert.equal(posts.at(-1)!.channel, "C00000001");
       assert.equal(reactionsAdded.length, 2);
       // The new round replaced the old raw spectator link; after its window the next one is wiped too.
@@ -476,6 +521,53 @@ test(
       await channel.finishRound();
       assert.ok(!(await channel.stored())!.includes('"round"'));
       assert.equal(((await status(requester)) as { status: { round?: object } }).status.round, undefined);
+
+      // Water: /waterrad on the same binding, a 💧 call, only :droplet: counts.
+      assert.equal((await api(requester, { type: "requestRound", minutes: 5, variant: "tea" })).status, 400);
+      assert.equal((await api(requester, { type: "requestRound", minutes: 5, variant: "beer" })).status, 400);
+      const watered = await slash({ command: "/waterrad", text: "2" });
+      assert.equal(watered.status, 200);
+      assert.equal(await watered.text(), "");
+      const waterCall = posts.at(-1)!;
+      assert.match(String(waterCall.text), /^💧 Waterronde!/);
+      assert.ok(JSON.stringify(waterCall.blocks).includes(`#/koffie/${watcher}`));
+      assert.equal(reactionsAdded.at(-1)!.name, "droplet");
+      const waterStatus = ((await status(requester)) as { status: { variant: string; round: { variant: string; spectatorCapability: string; active: boolean } } }).status;
+      assert.equal(waterStatus.variant, "water");
+      assert.equal(waterStatus.round.variant, "water");
+      assert.equal(((await status(watcher)) as { variant?: string }).variant, "water");
+      // One round at a time per channel, whatever it fetches; the reply names the running one.
+      assert.equal((await api(requester, { type: "requestRound", minutes: 2 })).status, 409);
+      const waterBusy = (await (await slash({ text: "3" })).json()) as { text: string };
+      assert.match(waterBusy.text, /^💧 Er loopt al een waterronde/);
+      const waterViewer = waterStatus.round.spectatorCapability;
+      const waterSession = sessions.get(sessions.idFromName(await wordLocator(waterViewer))) as unknown as {
+        due(): Promise<void>;
+        postNow(): Promise<void>;
+        land(): Promise<void>;
+      };
+      const waterSnapshot = async () => {
+        const r = await mf.dispatchFetch("http://localhost/api/session", {
+          headers: { Origin: "http://127.0.0.1:5173", Authorization: `Bearer ${waterViewer}` },
+        });
+        return ((await r.json()) as { session: PublicBeerWheelSession }).session;
+      };
+      assert.equal((await waterSnapshot()).variant, "water");
+      await waterSession.due();
+      // Only the 💧 drinker joins; ☕ reactors and the bot never do.
+      assert.deepEqual((await waterSnapshot()).participants.map((p) => p.name), ["Bob"]);
+      await waterSession.postNow();
+      const waterResult = posts.at(-1)!;
+      assert.equal(waterResult.reply_broadcast, true);
+      assert.match(String(waterResult.text), /^💧 .*Jij mag water halen!/s);
+      assert.ok(JSON.stringify(waterResult.blocks).includes('"user_id":"U00000003"'));
+      await waterSession.land();
+      await channel.finishRound();
+      // Idle again: the screen keeps the water theme until the next round.
+      const idle = ((await status(requester)) as { status: { variant: string; round?: object; roundsLeft: number } }).status;
+      assert.equal(idle.round, undefined);
+      assert.equal(idle.variant, "water");
+      assert.equal(idle.roundsLeft, 22);
 
       // Forged, stale or unknown slash commands do nothing.
       const count = posts.length;

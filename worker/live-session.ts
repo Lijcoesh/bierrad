@@ -1,3 +1,4 @@
+import type { ChannelVariant } from "../shared/channel";
 import { themes, type WheelVariant } from "../shared/variant";
 import { SlackApiClient, SlackError } from "./slack/api";
 import {
@@ -88,7 +89,7 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
     return new Date(record.expiresAt).toISOString();
   }
   /**
-   * A round of a channel-bound Koffierad: spectators only, one winner, the Slack
+   * A coffee or water round of a channel-bound Koffierad: spectators only, one winner, the Slack
    * call message as source and a fixed start. Nobody receives host rights.
    */
   async initializeChannelRound(
@@ -96,6 +97,7 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
     source: SlackSource,
     startAt: number,
     excludeUserIds: string[],
+    variant: ChannelVariant = "coffee",
   ): Promise<void> {
     const hostHash = await hashSecret(randomHex());
     if (this.read()) throw new Error("unavailable");
@@ -103,7 +105,7 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
       "CREATE TABLE IF NOT EXISTS session (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), value TEXT NOT NULL)",
     );
     const now = Date.now();
-    const record = newSession(hostHash, spectatorHash, now, "coffee");
+    const record = newSession(hostHash, spectatorHash, now, variant);
     record.preferredCount = 1;
     record.session = createSession(record.session.id, [], 1);
     record.expiresAt = startAt + SCHEDULE_RETENTION_MS;

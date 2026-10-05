@@ -1,12 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
 import {
   CHANNEL_IDLE_TTL_MS,
+  channelCopy,
   DEFAULT_ROUND_MINUTES,
+  isChannelVariant,
   MAX_ROUNDS_PER_DAY,
   validRoundMinutes,
   type ChannelCommandResult,
   type ChannelStatus,
+  type ChannelVariant,
 } from "../../shared/channel";
+import { themes } from "../../shared/variant";
 import {
   equalHash,
   hashSecret,
@@ -24,7 +28,7 @@ import {
 } from "../slack/access";
 import { postMessage } from "../slack/state";
 import { boundBody, callBody } from "./messages";
-import { SLASH_HELP } from "./slash";
+import { slashHelp, validChannelName } from "./slash";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** A round can be watched until this long after its start; it stops blocking once drawn. */
@@ -32,6 +36,8 @@ export const ROUND_WATCH_MS = 3 * 60 * 1000;
 
 interface Round {
   id: string;
+  /** Absent on rounds from before water; those are coffee. */
+  variant?: ChannelVariant;
   status: "posting" | "open";
   startAt: number;
   endsAt: number;
@@ -62,6 +68,10 @@ interface Binding {
    * on another screen. Absent on bindings made before it; rotation adds one.
    */
   viewerCapability?: string;
+  /** Last channel name Slack sent with a signed `/koffierad` or `/waterrad`; display only. */
+  channelName?: string;
+  /** What the latest round fetched, so an idle screen keeps its theme. */
+  lastVariant?: ChannelVariant;
   defaultMinutes: number;
   createdAt: number;
   /** Idle expiry, pushed back by binding and by every round. */
@@ -93,14 +103,27 @@ export async function channelLocator(channelId: string): Promise<string> {
 export async function channelViewerLocator(words: string): Promise<string> {
   return (await hashSecret(`koffierad-viewer:${words}`)).slice(0, 32);
 }
-const roundErrors: Record<string, string> = {
-  round_active: "☕ Er loopt al een koffieronde in dit kanaal. Klik op ☕ onder de oproep om mee te doen.",
-  round_limit: "☕ Vandaag zijn er al genoeg koffierondes gestart in dit kanaal. Morgen weer!",
-  slack_post_failed:
-    "☕ Het Koffierad kon niet in dit kanaal posten. Nodig de Koffierad-bot uit met /invite @Koffierad en probeer opnieuw.",
-  slack_uncertain:
-    "☕ Het is onzeker of de oproep is geplaatst. Kijk even in het kanaal voordat je het opnieuw probeert.",
-};
+/**
+ * Ephemeral replies for a refused `/koffierad` or `/waterrad`. A busy channel
+ * names the round that is running, which may be of the other kind.
+ */
+function roundError(
+  code: string,
+  requested: ChannelVariant,
+  running: ChannelVariant,
+): string | undefined {
+  const icon = themes[requested].icon;
+  switch (code) {
+    case "round_active":
+      return `${themes[running].icon} Er loopt al een ${channelCopy[running].round} in dit kanaal. Klik op ${themes[running].icon} onder de oproep om mee te doen.`;
+    case "round_limit":
+      return `${icon} Vandaag zijn er al genoeg rondes gestart in dit kanaal. Morgen weer!`;
+    case "slack_post_failed":
+      return `${icon} Het Koffierad kon niet in dit kanaal posten. Nodig de Koffierad-bot uit met /invite @Koffierad en probeer opnieuw.`;
+    case "slack_uncertain":
+      return `${icon} Het is onzeker of de oproep is geplaatst. Kijk even in het kanaal voordat je het opnieuw probeert.`;
+  }
+}
 
 export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
   private read(): Binding | undefined {
@@ -181,6 +204,7 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       requestCapability: input.requestCapability,
       viewerHash,
       viewerCapability: viewer,
+      ...(previous?.channelName ? { channelName: previous.channelName } : {}),
       defaultMinutes: previous?.defaultMinutes ?? DEFAULT_ROUND_MINUTES,
       createdAt: now,
       expiresAt: now + CHANNEL_IDLE_TTL_MS,
@@ -242,9 +266,16 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       const settled = await this.settledRoundId();
       const current = this.read();
       if (!current) throw new RequestError(404, "unavailable");
-      const { round } = this.status(current, "requester", Date.now(), settled);
+      const { round, channelName, variant } = this.status(
+        current,
+        "requester",
+        Date.now(),
+        settled,
+      );
       return json({
         type: "view",
+        ...(variant ? { variant } : {}),
+        ...(channelName ? { channelName } : {}),
         ...(round ? { round } : {}),
       } satisfies ChannelCommandResult);
     } catch (error) {
@@ -275,12 +306,15 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
   ): ChannelStatus {
     const round = binding.round;
     const used = now - binding.window >= DAY_MS ? 0 : binding.rounds;
+    const shown = round && round.status === "open" && now < round.endsAt;
     return {
       role,
+      variant: (shown ? round.variant : binding.lastVariant) ?? "coffee",
       defaultMinutes: binding.defaultMinutes,
-      ...(round && round.status === "open" && now < round.endsAt
+      ...(shown
         ? {
             round: {
+              variant: round.variant ?? "coffee",
               startAt: new Date(round.startAt).toISOString(),
               spectatorCapability: round.spectatorCapability,
               // A settled round stays visible (its result) but no longer blocks.
@@ -293,6 +327,7 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       ...(binding.viewerCapability
         ? { viewerCapability: binding.viewerCapability }
         : {}),
+      ...(binding.channelName ? { channelName: binding.channelName } : {}),
     };
   }
   private async authenticate(secret: string): Promise<ChannelStatus["role"]> {
@@ -328,7 +363,7 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
         } satisfies ChannelCommandResult);
       }
       const allowed: Record<string, string[]> = {
-        requestRound: ["minutes"],
+        requestRound: ["minutes", "variant"],
         setDefaultMinutes: ["minutes"],
         rotateRequestLink: [],
         unbind: [],
@@ -347,9 +382,15 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
         throw new RequestError(400, "invalid");
       const input = command as Record<string, unknown>;
       if (input.type === "requestRound") {
-        if (!validRoundMinutes(input.minutes))
+        if (
+          !validRoundMinutes(input.minutes) ||
+          ("variant" in input && !isChannelVariant(input.variant))
+        )
           throw new RequestError(400, "invalid");
-        await this.startRound(input.minutes);
+        await this.startRound(
+          input.minutes,
+          isChannelVariant(input.variant) ? input.variant : "coffee",
+        );
       } else {
         if (role !== "admin") throw new RequestError(403, "forbidden");
         const binding = this.read();
@@ -398,30 +439,48 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
    * Called only after the Worker verified Slack's signature for this channel.
    * Resolves to an ephemeral reply, or null on success: the call is the confirmation.
    */
-  async slash(minutes: number | undefined): Promise<string | null> {
+  async slash(
+    minutes: number | undefined,
+    channelName?: string,
+    variant: ChannelVariant = "coffee",
+  ): Promise<string | null> {
     const app = frontend(this.env);
     const binding = this.read();
+    const icon = themes[variant].icon;
     if (!binding || Date.now() >= binding.expiresAt)
-      return `☕ Dit kanaal heeft nog geen Koffierad.${app ? ` Koppel het via ${app.href}#/koffie-koppelen` : ""}`;
+      return `${icon} Dit kanaal heeft nog geen Koffierad.${app ? ` Koppel het via ${app.href}#/koffie-koppelen` : ""}`;
+    // Keeps the shown name current when the channel is renamed.
+    const name = validChannelName(channelName);
+    if (name && name !== binding.channelName) {
+      binding.channelName = name;
+      this.save(binding);
+    }
     const chosen = minutes ?? binding.defaultMinutes;
-    if (!validRoundMinutes(chosen)) return SLASH_HELP;
+    if (!validRoundMinutes(chosen)) return slashHelp(variant);
     try {
-      await this.startRound(chosen);
+      await this.startRound(chosen, variant);
       return null;
     } catch (error) {
       return (
-        (error instanceof RequestError && roundErrors[error.code]) ||
-        "☕ Het Koffierad is nu niet bereikbaar. Probeer het zo opnieuw."
+        (error instanceof RequestError &&
+          roundError(
+            error.code,
+            variant,
+            this.read()?.round?.variant ?? "coffee",
+          )) ||
+        `${icon} Het Koffierad is nu niet bereikbaar. Probeer het zo opnieuw.`
       );
     }
   }
   /**
    * Claims the round before any Slack call, posts the call, adds the first ☕
-   * and hands the draw to a fresh spectator-only LiveSession.
+   * or 💧 and hands the draw to a fresh spectator-only LiveSession.
    */
   private async startRound(
     minutes: number,
+    variant: ChannelVariant,
   ): Promise<{ startAt: string; spectatorCapability: string }> {
+    const reaction = themes[variant].reaction;
     const spectator = randomWords();
     const [sessionLocator, spectatorHash] = await Promise.all([
       wordLocator(spectator),
@@ -453,12 +512,14 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
     const id = crypto.randomUUID();
     binding.round = {
       id,
+      variant,
       status: "posting",
       startAt,
       endsAt: startAt + ROUND_WATCH_MS,
       spectatorCapability: spectator,
     };
     binding.rounds++;
+    binding.lastVariant = variant;
     binding.expiresAt = Math.max(binding.expiresAt, now + CHANNEL_IDLE_TTL_MS);
     this.save(binding);
     await this.arm(binding);
@@ -475,12 +536,16 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       binding.channelId,
       callBody(
         binding.channelId,
-        // The fixed channel page follows every round; older bindings link per round.
-        binding.requestCapability
-          ? `${app.href}#/koffie/${binding.requestCapability}`
-          : `${app.href}#/live/${spectator}`,
+        // The view-only word link follows every round. Older bindings fall back
+        // to the fixed channel page, or else link per round.
+        binding.viewerCapability
+          ? `${app.href}#/koffie/${binding.viewerCapability}`
+          : binding.requestCapability
+            ? `${app.href}#/koffie/${binding.requestCapability}`
+            : `${app.href}#/live/${spectator}`,
         startAt,
         Date.now(),
+        variant,
       ),
     );
     if (posted.status !== "posted") {
@@ -494,10 +559,10 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
       await api.call("reactions.add", {
         channel: binding.channelId,
         timestamp: posted.postedMessageTs,
-        name: "coffee",
+        name: reaction,
       });
     } catch {
-      // Not essential: people can still add ☕ themselves.
+      // Not essential: people can still add ☕ or 💧 themselves.
     }
     try {
       await this.env.SESSIONS.getByName(sessionLocator).initializeChannelRound(
@@ -505,10 +570,11 @@ export class ChannelWheel extends DurableObject<Env & SlackSecrets> {
         {
           channelId: binding.channelId,
           parentMessageTs: posted.postedMessageTs,
-          reactionName: "coffee",
+          reactionName: reaction,
         },
         startAt,
         binding.botUserId ? [binding.botUserId] : [],
+        variant,
       );
     } catch {
       clear();

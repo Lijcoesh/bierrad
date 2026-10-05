@@ -1,9 +1,34 @@
 /** Public contract for channel-bound Koffierad wheels. No secrets or Slack IDs. */
+import type { WheelVariant } from "./variant";
+/** What a channel round fetches; one binding serves both. */
+export type ChannelVariant = Extract<WheelVariant, "coffee" | "water">;
+export const channelVariants: readonly ChannelVariant[] = ["coffee", "water"];
+export function isChannelVariant(value: unknown): value is ChannelVariant {
+  return (channelVariants as readonly unknown[]).includes(value);
+}
+/** Fixed channel copy per variant; display only, never authorizes. */
+export const channelCopy: Record<
+  ChannelVariant,
+  { command: string; round: string; rounds: string; tap: string }
+> = {
+  coffee: {
+    command: "/koffierad",
+    round: "koffieronde",
+    rounds: "koffierondes",
+    tap: "zetten",
+  },
+  water: {
+    command: "/waterrad",
+    round: "waterronde",
+    rounds: "waterrondes",
+    tap: "tappen",
+  },
+};
 export const ROUND_MINUTE_CHOICES = [1, 2, 3, 5, 10, 15] as const;
 export const DEFAULT_ROUND_MINUTES = 5;
 export const MAX_ROUND_MINUTES = 30;
 /** Rounds per channel per rolling 24 hours. */
-export const MAX_ROUNDS_PER_DAY = 20;
+export const MAX_ROUNDS_PER_DAY = 25;
 /** A binding is removed after this long without a bind or round request. */
 export const CHANNEL_IDLE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
@@ -12,21 +37,28 @@ export const CHANNEL_IDLE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
  * over, after which a new round may be requested.
  */
 export interface ChannelRound {
+  /** Absent on rounds from before water; those are coffee. */
+  variant?: ChannelVariant;
   startAt: string;
   spectatorCapability: string;
   active: boolean;
 }
 export interface ChannelStatus {
   role: "admin" | "requester";
+  /** The theme to show: the latest round's, coffee before any round. */
+  variant?: ChannelVariant;
   defaultMinutes: number;
   round?: ChannelRound;
   roundsLeft: number;
   expiresAt: string;
   /** View-only word link of the channel, easy to type on another screen. */
   viewerCapability?: string;
+  /** Channel name from the last signed `/koffierad` or `/waterrad`, without `#`; display only. */
+  channelName?: string;
 }
 export type ChannelCommand =
-  | { type: "requestRound"; minutes: number }
+  /** Without a variant the round is coffee, as before water existed. */
+  | { type: "requestRound"; minutes: number; variant?: ChannelVariant }
   | { type: "setDefaultMinutes"; minutes: number }
   | { type: "rotateRequestLink" }
   | { type: "unbind" };
@@ -35,7 +67,12 @@ export type ChannelCommandResult =
   | { type: "rotated"; requestCapability: string; status: ChannelStatus }
   | { type: "unbound" }
   /** All a view-only word link gets: the latest round, no commands. */
-  | { type: "view"; round?: ChannelRound };
+  | {
+      type: "view";
+      variant?: ChannelVariant;
+      channelName?: string;
+      round?: ChannelRound;
+    };
 
 export function validRoundMinutes(value: unknown): value is number {
   return (

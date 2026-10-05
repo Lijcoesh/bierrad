@@ -1,5 +1,11 @@
 import { VariantContext, useTheme } from "./Theme";
-import { localHash, themes, type WheelVariant } from "../shared/variant";
+import {
+  localHash,
+  localVariant,
+  themes,
+  wheelVariants,
+  type WheelVariant,
+} from "../shared/variant";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import App from "./App";
 import { LocalSessionController } from "./sessions/LocalSessionController";
@@ -16,6 +22,7 @@ import {
   parseLiveRoute,
 } from "./sessions/liveNavigation";
 import { parseChannelRoute } from "./sessions/ChannelClient";
+import { isChannelVariant } from "../shared/channel";
 import {
   ChannelBindPage,
   ChannelViewPage,
@@ -46,21 +53,18 @@ export function SessionRoot() {
         )}
       </VariantContext.Provider>
     );
-  const login =
-    /^#\/(coffee-)?slack(?:\/(denied|forbidden|expired|unavailable|busy))?$/.exec(
-      hash,
-    );
+  const login = slackLoginRoute(hash);
   return login ? (
-    <VariantContext.Provider value={login[1] ? "coffee" : "beer"}>
-      <SlackLogin key={hash} failure={login[2] as SlackFailure | undefined} />
+    <VariantContext.Provider value={login.variant}>
+      <SlackLogin key={hash} failure={login.failure} />
     </VariantContext.Provider>
   ) : (
     <SessionPage key={hash} hash={hash} />
   );
 }
 function SessionPage({ hash }: { hash: string }) {
-  const variant: WheelVariant = hash === "#/coffee" ? "coffee" : "beer";
-  const local = !hash || hash === "#/beer" || hash === "#/coffee";
+  const local = localVariant(hash);
+  const variant: WheelVariant = local ?? "beer";
   const apiUrl = configuredApiUrl();
   const route = parseLiveRoute(hash);
   const [controller, setController] = useState<
@@ -125,8 +129,7 @@ function SessionTheme({
     document.documentElement.dataset.variant = variant;
     document.title = themes[variant].name + " — Wie haalt de volgende ronde?";
     const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-    if (icon)
-      icon.href = variant === "coffee" ? "./coffee-icon.svg" : "./favicon.svg";
+    if (icon) icon.href = themes[variant].favicon;
   }, [variant]);
   return (
     <VariantContext.Provider value={variant}>
@@ -213,9 +216,9 @@ function LiveBar({
           Start met Slack {theme.icon}
         </a>
       )}
-      {!live && apiUrl && theme.variant === "coffee" && (
+      {!live && apiUrl && isChannelVariant(theme.variant) && (
         <a className="button-link" href="#/koffie-koppelen">
-          Koppel aan een Slack-kanaal ☕
+          Koppel aan een Slack-kanaal {theme.icon}
         </a>
       )}
       {live?.role === "host" &&
@@ -274,6 +277,23 @@ const failures: Record<SlackFailure, string> = {
   unavailable: "Slack is nu niet bereikbaar of nog niet ingesteld.",
   busy: "Even rustig aan. Probeer over een minuut opnieuw.",
 };
+/** `#/slack` for beer, `#/<variant>-slack` otherwise, with an optional failure. */
+function slackLoginRoute(
+  hash: string,
+): { variant: WheelVariant; failure?: SlackFailure } | undefined {
+  const match =
+    /^#\/(?:([a-z]+)-)?slack(?:\/(denied|forbidden|expired|unavailable|busy))?$/.exec(
+      hash,
+    );
+  if (!match) return;
+  const variant = match[1] ?? "beer";
+  if (!wheelVariants.includes(variant as WheelVariant) || match[1] === "beer")
+    return;
+  return {
+    variant: variant as WheelVariant,
+    ...(match[2] ? { failure: match[2] as SlackFailure } : {}),
+  };
+}
 function slackLoginUrl(api: string, variant: WheelVariant): string {
   return `${api}/auth/slack/${variant}`;
 }
@@ -303,10 +323,11 @@ function SlackLogin({ failure }: { failure?: SlackFailure }) {
           Log in met Slack {theme.icon}
         </a>
       )}
-      {theme.variant === "coffee" && (
+      {isChannelVariant(theme.variant) && (
         <p>
-          Liever een vast Koffierad voor je afdeling, waar iedereen een ronde kan
-          aanvragen? <a href="#/koffie-koppelen">Koppel het aan een Slack-kanaal</a>
+          Liever een vast rad voor je afdeling, waar iedereen een koffie- of
+          waterronde kan aanvragen?{" "}
+          <a href="#/koffie-koppelen">Koppel het aan een Slack-kanaal</a>
         </p>
       )}
       <p>

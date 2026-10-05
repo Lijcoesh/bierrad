@@ -1,4 +1,4 @@
-import type { WheelVariant } from "../../shared/variant";
+import { isWheelVariant, type WheelVariant } from "../../shared/variant";
 import { equalHash, randomHex } from "../auth";
 import { object, SlackApiClient, SlackError, type SlackObject } from "./api";
 import { loginConfigured, type SlackSecrets } from "./access";
@@ -37,10 +37,11 @@ export function parseLoginCookie(
   // Duplicates are ambiguous; fail closed.
   if (values.length !== 1) return;
   const match =
-    /^(beer|coffee|channel-[CG][A-Z0-9]{8,20})\.([a-f0-9]{64})\.([a-f0-9]{64})\.(\d{13})$/.exec(
+    /^([a-z]+|channel-[CG][A-Z0-9]{8,20})\.([a-f0-9]{64})\.([a-f0-9]{64})\.(\d{13})$/.exec(
       values[0].slice(LOGIN_COOKIE.length + 1),
     );
   if (!match || Number(match[4]) <= now) return;
+  if (!match[1].startsWith("channel-") && !isWheelVariant(match[1])) return;
   const channel = match[1].startsWith("channel-")
     ? match[1].slice(8)
     : undefined;
