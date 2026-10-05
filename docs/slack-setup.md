@@ -128,7 +128,7 @@ npx wrangler secret put COFFEE_SLACK_SIGNING_SECRET --env=""
 Waterrondes gebruiken dezelfde Koffierad-app, dezelfde koppeling en dezelfde links; er zijn geen nieuwe secrets, scopes of migraties nodig en bestaande koppelingen hoeven niet opnieuw.
 
 1. Publiceer eerst de Worker en daarna de frontend.
-2. Werk de app bij met het [manifest](slack-coffee-app-manifest.json): nieuw is alleen het tweede slashcommando `/waterrad`, met **dezelfde** Request URL `https://bierrad-live.timzegveld.workers.dev/slack/commands`. Herinstalleer de app als Slack daarom vraagt. Wil je dat de bot in Slack niet meer "Koffierad" heet, pas dan de weergavenaam en eventueel het icoon aan ([water-icon.png](../public/water-icon.png)); dat is optioneel en verandert niets aan de werking.
+2. Werk de app bij met het [manifest](slack-coffee-app-manifest.json): nieuw is alleen het tweede slashcommando `/waterrad`, met **dezelfde** Request URL `https://bierrad-live.timzegveld.workers.dev/slack/commands`. Herinstalleer de app als Slack daarom vraagt. Wil je dat de bot in Slack niet meer "Koffierad" heet, pas dan de weergavenaam en eventueel het icoon aan. Voor de gecombineerde bot is er een gemengd koffie-watericoon: [slack-coffee-water-icon.png](../public/slack-coffee-water-icon.png) (1024 × 1024, vectorbron [slack-coffee-water-icon.svg](../public/slack-coffee-water-icon.svg)), te uploaden bij Basic Information → Display Information → App icon. Dat is optioneel en verandert niets aan de werking.
 3. Test in een gekoppeld kanaal met synthetische testaccounts: `/waterrad 1` plaatst een 💧-oproep, alleen 💧 telt mee, `/koffierad` tijdens die ronde meldt dat er al een waterronde loopt, en het vaste kanaalrad kleurt blauw en daarna bij een koffieronde weer bruin.
 
 ### Per kanaal
