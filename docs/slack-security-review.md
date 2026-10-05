@@ -130,3 +130,11 @@ The user explicitly requested on 2026-10-02 that a scheduled draw posts the spec
 - **Delivery:** claimed and synced before I/O with a two-minute crash lease, rechecks Slack access after the claim, never repeats uncertain posts, one automatic retry after a definite rejection only before the start, and at most five reminder posts per session to bound spam from rescheduling. No new scopes, secrets, bindings, dependencies or logging.
 
 Tests (synthetic data only) cover opt-in, hash/locator/format refusal, missing Slack source, lead time and immediate posting, the 30-second floor, link wiping on every exit path, DTO and storage absence after settling, single delivery under concurrent alarms, message shape for both variants, and rejection followed by cancellation through the real Worker.
+
+## Waterrad review — 2026-10-05
+
+Requested by the user, including sharing the Koffierad Slack app; reviewed against every SECURITY.md section, which now has a Waterrad paragraph. No new dependencies, endpoints, scopes, secrets, capabilities, logging or public participant data. Standalone remains available.
+
+`water` joins the allowlisted variant enum for session creation, the login start route and the login cookie; unknown names are still refused, `/auth/slack/callback` is never treated as a start, and the variant stays immutable. `themes[variant].slackApp` selects the credentials: water resolves only `COFFEE_SLACK_*`, never the beer app, and fails closed like coffee when those are absent. The reaction comes from the server-side theme (`droplet`), never from a client command; the reaction allowlist in the participant source is derived from the same table, and the frozen result source keeps the reaction so retries keep water text. Local rosters and preferences use separate `waterrad.*` keys; live rosters never enter them. The icon is an original generic vector droplet with a PNG export, without employee or company data.
+
+The real Worker/SQLite/alarms Slack suite now also runs for water: start, authorization, DTO privacy, immutable variant, exclusion of `:beers:` and `:coffee:`, the Koffierad bot credential, water result text, refresh and disconnected completion. Frontend tests cover water copy, `:droplet:` and storage isolation.

@@ -1,11 +1,11 @@
-export type WheelVariant = "beer" | "coffee";
-export const wheelVariants: readonly WheelVariant[] = ["beer", "coffee"];
+export type WheelVariant = "beer" | "coffee" | "water";
+export const wheelVariants: readonly WheelVariant[] = ["beer", "coffee", "water"];
 export function isWheelVariant(value: unknown): value is WheelVariant {
   return (wheelVariants as readonly unknown[]).includes(value);
 }
 /** Slack reactions a variant counts; each variant reads only its own. */
-export type SlackReaction = "beers" | "coffee";
-/** The Slack app whose server-side credentials a variant uses. */
+export type SlackReaction = "beers" | "coffee" | "droplet";
+/** The Slack app whose server-side credentials a variant uses; water shares the Koffierad app. */
 export type SlackApp = "beer" | "coffee";
 export interface WheelTheme {
   name: string;
@@ -76,6 +76,35 @@ export const themes: Record<WheelVariant, WheelTheme> = {
       "#caa58b",
       "#bec9a7",
       "#e6baab",
+    ],
+  },
+  water: {
+    name: "Waterrad",
+    icon: "💧",
+    winnerIcon: "🚰",
+    drink: "water",
+    reaction: "droplet",
+    slackApp: "coffee",
+    storage: "waterrad",
+    favicon: "./water-icon.svg",
+    badge: "Tijd voor een waterronde",
+    question: "Wie haalt het water?",
+    crew: "waterploeg",
+    brigade: "waterbrigade",
+    footer: "Met liefde getapt voor de dorstige afdeling.",
+    finale: "DE WATERBRIGADE VAN DEZE RONDE",
+    resultOne: "mag het water halen.",
+    resultMany: "halen het water.",
+    ending: "Rondje gemeentepils van de zaak! Hydrateer ons trots.",
+    wheelColors: [
+      "#7cc6d9",
+      "#bfe5ee",
+      "#9fc9b4",
+      "#e3f3f6",
+      "#a9b8e0",
+      "#86b7c9",
+      "#c4dfc9",
+      "#d6e6f5",
     ],
   },
 };

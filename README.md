@@ -183,7 +183,7 @@ SessionController → Draw Engine → DrawInstruction → Wheel Renderers
                   officiële uitslag → oorspronkelijke Slack-thread
 ```
 
-`worker/slack` bevat de getypeerde client, parser, deelnemersbron, private mapping en resultaattekst. `worker/slack/login.ts` doet de inlogflow via `GET /auth/slack/<beer|coffee>` en `GET /auth/slack/callback`; hostcommando's zijn `slackImport` (optioneel permalink, zonder link = refresh), `slackManual`, `slackRetry`. Ook gemanipuleerde spectatorrequests worden afgewezen. Spectator-DTO's bevatten geen Slack-metadata. De raderen/selectie zijn ongewijzigd en blijven zonder netwerk of Slack functioneren.
+`worker/slack` bevat de getypeerde client, parser, deelnemersbron, private mapping en resultaattekst. `worker/slack/login.ts` doet de inlogflow via `GET /auth/slack/<beer|coffee|water>` en `GET /auth/slack/callback`; hostcommando's zijn `slackImport` (optioneel permalink, zonder link = refresh), `slackManual`, `slackRetry`. Ook gemanipuleerde spectatorrequests worden afgewezen. Spectator-DTO's bevatten geen Slack-metadata. De raderen/selectie zijn ongewijzigd en blijven zonder netwerk of Slack functioneren.
 
 ## Koffierad ☕
 
@@ -194,6 +194,10 @@ De variant van een live-sessie staat vanaf creatie vast op de server; host en ki
 ### Live Koffierad per Slack-kanaal
 
 Iedere afdeling kan een eigen Koffierad aan een eigen Slack-kanaal koppelen via `#/koffie-koppelen` (inloggen met Slack, daarna plaatst de bot een bevestiging in het kanaal). De vaste kanaallink (`#/koffie/<link>`) is het rad van dat kanaal: hij toont steeds het live rad en de uitslag van de laatste ronde. Daarna kan **iedereen** een koffieronde aanvragen: op die pagina of door in het kanaal `/koffierad` of `/koffierad 10` te typen. De aanvrager kiest binnen hoeveel minuten het rad draait (standaard 5). De bot plaatst een oproep in het kanaal en zet er zelf al een ☕-reactie onder, zodat meedoen één klik is; die botreactie telt nooit mee. Kijkers zien het rad vollopen. Na de wachttijd draait het rad op de server, kiest het precies één koffiehaler en meldt de bot die in de thread van de oproep, en ook in het kanaal. Doet niemand mee, dan staat dat in de thread. Voor een extern scherm toont de kanaalpagina ook een meekijklink in woorden (`#/koffie/aap-beer-…`, makkelijk over te typen): die toont steeds het rad en de uitslag van de laatste ronde, maar kan geen rondes starten of iets beheren. De beheerlink (`#/koffie-beheer/…`) kan de standaardwachttijd aanpassen, een nieuwe aanvraaglink maken (dat vervangt ook de meekijklink) en ontkoppelen. Zie [kanaal koppelen](docs/slack-setup.md#koffierad-aan-een-kanaal-koppelen) en de [securityreview](docs/channel-security-review.md).
+
+## Waterrad 💧
+
+Het derde rad: **wie haalt het water voor de afdeling?** Open `#/water` of kies 💧 Waterrad in de wissel bovenaan. Alles werkt zoals bij koffie (lokaal, live, Start met Slack via `#/water-slack`, plannen en kijklinks), met blauwe/aqua kleuren, een eigen icoon en eigen teksten ("Rondje gemeentepils van de zaak! Hydrateer ons trots."). `POST /api/sessions` accepteert ook `variant: "water"`. Water gebruikt bewust **dezelfde Slack-app als koffie** (geen nieuwe app of secrets) en telt uitsluitend **💧 `:droplet:`**-reacties. Zie [Waterrad in Slack](docs/slack-setup.md#waterrad).
 
 ## Linkvoorbeelden
 

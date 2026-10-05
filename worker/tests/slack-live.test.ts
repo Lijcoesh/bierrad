@@ -8,12 +8,16 @@ import type {
   PublicBeerWheelSession,
 } from "../../shared/protocol";
 
-for (const variant of ["beer", "coffee"] as const)
+for (const variant of ["beer", "coffee", "water"] as const)
   test(
     `${variant} Slack Worker: Sign in with Slack starts, authorization, DTO privacy, refresh, disconnected completion and durable idempotency`,
     { timeout: 50000 },
     async () => {
-      const reaction = variant === "coffee" ? "coffee" : "beers";
+      const reaction = { beer: "beers", coffee: "coffee", water: "droplet" }[
+        variant
+      ];
+      // Water shares the Koffierad app; beer has its own.
+      const coffeeApp = variant !== "beer";
       const credential = `synthetic-${variant}-credential`;
       const clientId = "1000000000.2000000000",
         clientSecret = `synthetic-${variant}-client-secret`;
@@ -57,27 +61,27 @@ for (const variant of ["beer", "coffee"] as const)
               bindings: {
                 ALLOWED_ORIGINS: "http://127.0.0.1:5173",
                 FRONTEND_URL: "http://127.0.0.1:5173/",
-                [variant === "coffee"
+                [coffeeApp
                   ? "SLACK_BOT_TOKEN"
                   : "COFFEE_SLACK_BOT_TOKEN"]: "synthetic-other-app",
-                [variant === "coffee"
+                [coffeeApp
                   ? "SLACK_CLIENT_ID"
                   : "COFFEE_SLACK_CLIENT_ID"]: "1000000000.3000000000",
-                [variant === "coffee"
+                [coffeeApp
                   ? "SLACK_CLIENT_SECRET"
                   : "COFFEE_SLACK_CLIENT_SECRET"]:
                   "synthetic-other-client-secret",
-                [variant === "coffee"
+                [coffeeApp
                   ? "COFFEE_SLACK_BOT_TOKEN"
                   : "SLACK_BOT_TOKEN"]: credential,
-                [variant === "coffee"
+                [coffeeApp
                   ? "COFFEE_SLACK_CLIENT_ID"
                   : "SLACK_CLIENT_ID"]: clientId,
-                [variant === "coffee"
+                [coffeeApp
                   ? "COFFEE_SLACK_CLIENT_SECRET"
                   : "SLACK_CLIENT_SECRET"]: clientSecret,
                 // A leftover start-link secret must not revive legacy sessions.
-                [variant === "coffee"
+                [coffeeApp
                   ? "COFFEE_SLACK_START_GRANT"
                   : "SLACK_START_GRANT"]: JSON.stringify({
                   hash: legacyHash,
@@ -155,11 +159,14 @@ for (const variant of ["beer", "coffee"] as const)
                       ts: "1234567890.123456",
                       reactions: [
                         { name: reaction, count: users.length, users },
-                        {
-                          name: reaction === "coffee" ? "beers" : "coffee",
-                          count: 1,
-                          users: ["U00000009"],
-                        },
+                        // Other variants' reactions never count.
+                        ...["beers", "coffee", "droplet"]
+                          .filter((name) => name !== reaction)
+                          .map((name) => ({
+                            name,
+                            count: 1,
+                            users: ["U00000009"],
+                          })),
                       ],
                     },
                   });
@@ -241,7 +248,7 @@ for (const variant of ["beer", "coffee"] as const)
             (await call("/api/sessions", undefined, invalid)).status,
             400,
           );
-        const prefix = variant === "coffee" ? "coffee-" : "";
+        const prefix = variant === "beer" ? "" : `${variant}-`;
         const navigate = (path: string, cookie?: string) =>
           mf.dispatchFetch(`http://localhost${path}`, {
             redirect: "manual",
@@ -397,7 +404,7 @@ for (const variant of ["beer", "coffee"] as const)
           (
             await command({
               type: "setVariant",
-              variant: variant === "coffee" ? "beer" : "coffee",
+              variant: variant === "beer" ? "coffee" : "beer",
             })
           ).status,
           400,
@@ -538,11 +545,15 @@ for (const variant of ["beer", "coffee"] as const)
         assert.equal(state.slack?.result?.status, "posted");
         assert.ok(
           String(sent[0].text).includes(
-            variant === "coffee" ? "koffie halen" : "bier halen",
+            { beer: "bier halen", coffee: "koffie halen", water: "water halen" }[
+              variant
+            ],
           ),
         );
         assert.ok(
-          String(sent[0].text).startsWith(variant === "coffee" ? "☕" : "🍻"),
+          String(sent[0].text).startsWith(
+            { beer: "🍻", coffee: "☕", water: "💧" }[variant],
+          ),
         );
         assert.equal(sent[0].thread_ts, "1234567890.123456");
         assert.equal(sent[0].reply_broadcast, false);
