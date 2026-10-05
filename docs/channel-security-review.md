@@ -21,7 +21,7 @@ Implementation review against SECURITY.md (section "Channel-bound Koffierad", ad
 ## Slack behaviour
 
 - Scopes added: `reactions:write` (only `reactions.add` of `:coffee:` on the bot's own call message) and `commands`. No `channels:read`, history, events or interactivity.
-- Messages are fixed text with server-built links (`FRONTEND_URL` + fragment), `mrkdwn: false`, `parse: none`, no link names, no unfurls. The call is top-level and links to the fixed channel page; results and notices are thread replies with `reply_broadcast: false`. Result mentions use only server-frozen identities, as before.
+- Messages are fixed text with server-built links (`FRONTEND_URL` + fragment), `mrkdwn: false`, `parse: none`, no link names, no unfurls. The call is top-level and links to the fixed channel page; results and notices are thread replies. Only the winner result also goes to the channel (`reply_broadcast: true`, requested by the owner on 2026-10-05); notices keep `reply_broadcast: false`. Result mentions use only server-frozen identities, as before.
 - Rounds are claimed before I/O. A definite rejection of the call clears the round; an uncertain result is not retried. Reaction refreshes happen at most once per minute and never within 30 seconds of the final check, so a refresh cannot block the draw.
 
 ## Accepted limitations

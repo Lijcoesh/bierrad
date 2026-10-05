@@ -15,6 +15,8 @@ export interface SlackJob {
   mentionIds?: (string | null)[];
   /** Channel rounds without a draw: a fixed notice instead of winners. */
   notice?: ChannelNotice;
+  /** Channel round winners are also sent to the channel ("Also send to"). */
+  broadcast?: boolean;
   status: "pending" | "posting" | "posted" | "failed" | "uncertain";
   readyAt: number;
   attemptedAt?: number;
@@ -114,6 +116,7 @@ export function queueResult(record: StoredSession) {
         record.session.participants.find((p) => p.id === spin.winnerId)!.name,
     ),
     mentionIds: draw.spins.map((spin) => identities.get(spin.winnerId) ?? null),
+    ...(slack.channelRound ? { broadcast: true } : {}),
     status: "pending",
     readyAt: Math.max(
       ...draw.spins.map((s) => Date.parse(s.startAt) + s.durationMs),
@@ -207,7 +210,8 @@ export function resultBody(job: SlackJob) {
     mrkdwn: false,
     parse: "none",
     link_names: false,
-    reply_broadcast: false,
+    // Only the winners of a channel round; never notices or Bierrad results.
+    reply_broadcast: job.broadcast === true,
     unfurl_links: false,
     unfurl_media: false,
   };

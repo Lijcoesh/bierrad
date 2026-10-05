@@ -374,7 +374,7 @@ test(
         { ...initial, expiresAt: undefined, viewerCapability: undefined },
         { role: "requester", defaultMinutes: 5, roundsLeft: 20, expiresAt: undefined, viewerCapability: undefined },
       );
-      // The word link is never posted and only stored as a hash and a raw copy for link holders.
+      // The confirmation carries only the request link, not the word link.
       assert.ok(!JSON.stringify(posts).includes(watcher));
       // It only watches: no round yet, no settings, no commands of any kind.
       assert.deepEqual(await status(watcher), { type: "view" });
@@ -452,7 +452,8 @@ test(
       await session.postNow();
       const result = posts.at(-1)!;
       assert.equal(result.thread_ts, callTs);
-      assert.equal(result.reply_broadcast, false);
+      // The winner is also sent to the channel, as a thread reply ("Also send to").
+      assert.equal(result.reply_broadcast, true);
       assert.match(String(result.text), /Jij mag koffie halen!/);
       assert.ok(/"user_id":"U0000000[12]"/.test(JSON.stringify(result.blocks)));
 
