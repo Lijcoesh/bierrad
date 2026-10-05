@@ -1,5 +1,6 @@
 import type { WheelVariant } from "../shared/variant";
 import {
+  queueChannelNotice,
   queueResult,
   REMINDER_LEAD_MS,
   REMINDER_MIN_LEAD_MS,
@@ -23,6 +24,8 @@ import {
 export const TTL_MS = DEFAULT_SESSION_TTL_MS;
 // Long enough for every screen to show a synchronized 3-2-1 before the wheels move.
 export const START_DELAY_MS = 4000;
+/** Channel rounds stop refreshing this long before the final pre-draw check. */
+export const CHANNEL_REFRESH_MARGIN_MS = 30000;
 export class RequestError extends Error {
   constructor(
     public status: number,
@@ -129,6 +132,32 @@ export function executeScheduledDraw(
     if (!(error instanceof RequestError)) throw error;
     record.revision++;
   }
+  if (record.slack?.channelRound && record.session.state !== "countdown")
+    queueChannelNotice(
+      record,
+      ready && !record.session.participants.length ? "empty" : "unreadable",
+      now,
+    );
+}
+/**
+ * Channel rounds have no host, so the server re-reads reactions on its own and
+ * viewers watch the wheel fill. Never close to the final check before the draw.
+ */
+export function channelRefreshAt(record: StoredSession): number | undefined {
+  const slack = record.slack,
+    plan = record.scheduledDraw;
+  if (
+    !slack?.channelRound ||
+    !slack.source ||
+    slack.importing ||
+    plan?.status !== "pending"
+  )
+    return;
+  const at = Math.max(slack.nextImportAt ?? 0, slack.retryImportAt ?? 0);
+  return at <
+    Date.parse(plan.startAt) - START_DELAY_MS - CHANNEL_REFRESH_MARGIN_MS
+    ? at
+    : undefined;
 }
 export function advance(record: StoredSession, now: number): boolean {
   if (now >= record.expiresAt) return false;
@@ -154,6 +183,8 @@ export function nextDeadline(record: StoredSession): number {
   if (record.scheduledDraw?.status === "refreshing")
     times.push(record.scheduleCheckUntil ?? record.expiresAt);
   const slack = record.slack;
+  const refresh = channelRefreshAt(record);
+  if (refresh !== undefined) times.push(refresh);
   if (slack?.importing) times.push(slack.importing.until);
   if (slack?.job?.status === "pending") times.push(slack.job.readyAt);
   if (slack?.job?.status === "posting")

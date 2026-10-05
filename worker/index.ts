@@ -24,7 +24,17 @@ import {
 } from "./auth";
 import { frontend, json, readBody, redirect } from "./http";
 import { RequestError } from "./session";
+import { validRoundMinutes } from "../shared/channel";
+import { channelLocator } from "./channel/wheel";
+import {
+  ephemeral,
+  parseSlashCommand,
+  readSlashBody,
+  SLASH_HELP,
+  verifySlackSignature,
+} from "./channel/slash";
 export { LiveSession } from "./live-session";
+export { ChannelWheel } from "./channel/wheel";
 
 type WorkerEnv = Env & SlackSecrets;
 /** Whether an offered capability opens the same session as the caller's. */
@@ -83,13 +93,24 @@ async function slackAuth(
   const callback = `${url.origin}/auth/slack/callback`;
   const pending = parseLoginCookie(request.headers.get("Cookie"));
   const start = /^\/auth\/slack\/(beer|coffee)$/.exec(url.pathname);
+  // Binding a Koffierad to a channel: the channel travels in the login cookie.
+  const bindStart = /^\/auth\/slack\/channel\/([CG][A-Z0-9]{8,20})$/.exec(
+    url.pathname,
+  );
   let variant: WheelVariant = start
     ? (start[1] as WheelVariant)
-    : (pending?.variant ?? "beer");
+    : bindStart
+      ? "coffee"
+      : (pending?.variant ?? "beer");
+  const binding =
+    !!bindStart ||
+    (!start && url.pathname === "/auth/slack/callback" && !!pending?.channelId);
   const clear = loginCookie("", 0);
   const fail = (reason: string) =>
     redirect(
-      `${app.href}#/${variant === "coffee" ? "coffee-" : ""}slack/${reason}`,
+      binding
+        ? `${app.href}#/koffie-koppelen/${reason}`
+        : `${app.href}#/${variant === "coffee" ? "coffee-" : ""}slack/${reason}`,
       clear,
     );
   try {
@@ -97,12 +118,14 @@ async function slackAuth(
     const ip = request.headers.get("CF-Connecting-IP") ?? "local";
     if (!(await env.REQUEST_LIMIT.limit({ key: ip })).success)
       return fail("busy");
-    if (start) {
+    if (start || bindStart) {
       if (url.search) return fail("expired");
       const login = beginLogin(
         slackEnvironment(env, variant),
         variant,
         callback,
+        Date.now(),
+        bindStart?.[1],
       );
       return redirect(login.location, login.cookie);
     }
@@ -111,12 +134,46 @@ async function slackAuth(
     variant = pending.variant;
     // Before any Slack call: failed attempts also spend the creation budget.
     if (!(await creationAllowed(env, ip))) return fail("busy");
-    await completeLogin(
+    const workspace = await completeLogin(
       slackEnvironment(env, variant),
       pending,
       url.searchParams,
       callback,
     );
+    if (pending.channelId) {
+      const locator = await channelLocator(pending.channelId);
+      const admin = randomHex(),
+        request = randomHex();
+      const [adminHash, requestHash] = await Promise.all([
+        hashSecret(admin),
+        hashSecret(request),
+      ]);
+      const requestCapability = `${locator}.${request}`;
+      try {
+        await env.CHANNELS.getByName(locator).bind(
+          {
+            locator,
+            channelId: pending.channelId,
+            teamId: workspace.teamId,
+            ...(workspace.botUserId ? { botUserId: workspace.botUserId } : {}),
+            adminHash,
+            requestHash,
+          },
+          `${app.href}#/koffie/${requestCapability}`,
+        );
+      } catch (error) {
+        // RPC errors keep only their message: a fixed code from RequestError.
+        return fail(
+          error instanceof Error && error.message === "not_in_channel"
+            ? "not_in_channel"
+            : "unavailable",
+        );
+      }
+      return redirect(
+        `${app.href}#/koffie-beheer/${locator}.${admin}/${requestCapability}`,
+        clear,
+      );
+    }
     const created = await createSession(env, variant, {
       hash: LOGIN_GRANT,
       expiresAt: Date.now() + LOGIN_CEILING_MS,
@@ -130,13 +187,81 @@ async function slackAuth(
   }
 }
 
+/**
+ * `/koffierad [minuten]` from Slack. Server-to-server: no Origin or capability,
+ * authorized solely by the Koffierad app's request signature.
+ */
+async function slashCommand(
+  request: Request,
+  env: WorkerEnv,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  try {
+    const body = await readSlashBody(request);
+    // Slack's certificate check carries no command; answer without acting.
+    if (new URLSearchParams(body).get("ssl_check") === "1")
+      return new Response(null, { status: 200 });
+    if (
+      !(await verifySlackSignature(
+        env.COFFEE_SLACK_SIGNING_SECRET,
+        request.headers,
+        body,
+      ))
+    )
+      return json({ code: "forbidden" }, 401);
+    const command = parseSlashCommand(body);
+    if (command.kind === "invalid") return json({ code: "invalid" }, 400);
+    if (command.kind === "wrongChannel")
+      return ephemeral(
+        "☕ Gebruik /koffierad in een kanaal waar het Koffierad aan gekoppeld is.",
+      );
+    if (
+      command.kind === "help" ||
+      (command.minutes !== undefined && !validRoundMinutes(command.minutes))
+    )
+      return ephemeral(SLASH_HELP);
+    const key = `slack:${command.userId}`;
+    if (
+      !(await env.REQUEST_LIMIT.limit({ key })).success ||
+      !(await env.CREATION_LIMIT.limit({ key })).success ||
+      !(await env.CREATION_GLOBAL.limit({ key: "creation" })).success
+    )
+      return ephemeral("☕ Even rustig aan. Probeer het over een minuut opnieuw.");
+    const work = env.CHANNELS.getByName(
+      await channelLocator(command.channelId),
+    ).slash(command.minutes);
+    // Slack waits about three seconds; the round continues after we answer.
+    ctx.waitUntil(work.catch(() => undefined));
+    return ephemeral(
+      await Promise.race([
+        work.catch(
+          () => "☕ Het Koffierad is nu niet bereikbaar. Probeer het zo opnieuw.",
+        ),
+        new Promise<string>((resolve) =>
+          setTimeout(
+            () =>
+              resolve(
+                "☕ De koffieronde wordt aangevraagd. Kijk zo in het kanaal.",
+              ),
+            2500,
+          ),
+        ),
+      ]),
+    );
+  } catch {
+    return json({ code: "invalid" }, 400);
+  }
+}
+
 export default {
-  async fetch(request, env): Promise<Response> {
+  async fetch(request, env, ctx): Promise<Response> {
     const origin = request.headers.get("Origin");
     const allowed = env.ALLOWED_ORIGINS.split(",");
     const url = new URL(request.url);
     if (url.pathname.startsWith("/auth/slack/"))
       return slackAuth(request, env, url);
+    if (url.pathname === "/slack/commands")
+      return slashCommand(request, env, ctx);
     let response: Response;
     try {
       if (!origin || !allowed.includes(origin))
@@ -173,6 +298,30 @@ export default {
               ? body.variant
               : "beer";
           response = json(await createSession(env, variant), 201);
+        } else if (url.pathname === "/api/channel") {
+          if (!["GET", "POST"].includes(request.method))
+            throw new RequestError(405, "invalid");
+          const capability = parseCapability(
+            request.headers.get("Authorization")?.replace(/^Bearer /, "") ??
+              null,
+          );
+          // Channel links are always hex `locator.secret`.
+          if (!capability?.locator) throw new RequestError(404, "unavailable");
+          const command =
+            request.method === "POST" ? await readBody(request) : null;
+          // A round creates a session: it spends the creation budget too.
+          if (
+            command &&
+            typeof command === "object" &&
+            "type" in command &&
+            command.type === "requestRound" &&
+            !(await creationAllowed(env, ip))
+          )
+            throw new RequestError(429, "rate_limited");
+          response = await env.CHANNELS.getByName(capability.locator).access(
+            capability.secret,
+            command,
+          );
         } else if (
           ["/api/session", "/api/command", "/api/socket"].includes(url.pathname)
         ) {

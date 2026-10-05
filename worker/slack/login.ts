@@ -17,6 +17,8 @@ export class LoginError extends Error {
 }
 interface Pending {
   variant: WheelVariant;
+  /** Set when the login binds a Koffierad to this channel instead of starting a session. */
+  channelId?: string;
   state: string;
   nonce: string;
   expiresAt: number;
@@ -35,12 +37,17 @@ export function parseLoginCookie(
   // Duplicates are ambiguous; fail closed.
   if (values.length !== 1) return;
   const match =
-    /^(beer|coffee)\.([a-f0-9]{64})\.([a-f0-9]{64})\.(\d{13})$/.exec(
+    /^(beer|coffee|channel-[CG][A-Z0-9]{8,20})\.([a-f0-9]{64})\.([a-f0-9]{64})\.(\d{13})$/.exec(
       values[0].slice(LOGIN_COOKIE.length + 1),
     );
   if (!match || Number(match[4]) <= now) return;
+  const channel = match[1].startsWith("channel-")
+    ? match[1].slice(8)
+    : undefined;
   return {
-    variant: match[1] as WheelVariant,
+    // Channel binding is a Koffierad feature; it always uses the coffee app.
+    variant: channel ? "coffee" : (match[1] as WheelVariant),
+    ...(channel ? { channelId: channel } : {}),
     state: match[2],
     nonce: match[3],
     expiresAt: Number(match[4]),
@@ -49,11 +56,18 @@ export function parseLoginCookie(
 export function loginCookie(value: string, maxAge: number): string {
   return `${LOGIN_COOKIE}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
 }
-async function workspace(api: SlackApiClient): Promise<string> {
+async function workspace(
+  api: SlackApiClient,
+): Promise<{ teamId: string; botUserId?: string }> {
   const data = await api.call("auth.test", {});
   if (typeof data.team_id !== "string" || !team.test(data.team_id))
     throw new SlackError("slack_response");
-  return data.team_id;
+  return {
+    teamId: data.team_id,
+    ...(typeof data.user_id === "string" && user.test(data.user_id)
+      ? { botUserId: data.user_id }
+      : {}),
+  };
 }
 /** No Slack call here: anyone can open this route, so it must not spend bot quota. */
 export function beginLogin(
@@ -61,8 +75,14 @@ export function beginLogin(
   variant: WheelVariant,
   redirectUri: string,
   now = Date.now(),
+  channelId?: string,
 ): { location: string; cookie: string } {
   if (!loginConfigured(env)) throw new LoginError("unavailable");
+  if (
+    channelId !== undefined &&
+    (variant !== "coffee" || !/^[CG][A-Z0-9]{8,20}$/.test(channelId))
+  )
+    throw new LoginError("expired");
   const state = randomHex(),
     nonce = randomHex();
   const location = new URL("https://slack.com/openid/connect/authorize");
@@ -78,7 +98,7 @@ export function beginLogin(
   return {
     location: location.href,
     cookie: loginCookie(
-      `${variant}.${state}.${nonce}.${now + LOGIN_TTL_MS}`,
+      `${channelId ? `channel-${channelId}` : variant}.${state}.${nonce}.${now + LOGIN_TTL_MS}`,
       LOGIN_TTL_MS / 1000,
     ),
   };
@@ -100,7 +120,10 @@ function claims(idToken: unknown): Record<string, unknown> {
     throw new LoginError("forbidden");
   }
 }
-/** Validates the callback and returns only whether the starter is allowed. */
+/**
+ * Validates the callback; resolves only for allowed starters, with the bot's
+ * workspace (never the person's identity).
+ */
 export async function completeLogin(
   env: SlackSecrets,
   pending: Pending,
@@ -108,7 +131,7 @@ export async function completeLogin(
   redirectUri: string,
   fetcher?: typeof fetch,
   now = Date.now(),
-): Promise<void> {
+): Promise<{ teamId: string; botUserId?: string }> {
   const state = params.get("state");
   if (
     params.getAll("state").length !== 1 ||
@@ -159,13 +182,14 @@ export async function completeLogin(
       throw new LoginError("forbidden");
     const claimedTeam = id["https://slack.com/team_id"];
     const bot = new SlackApiClient(env.SLACK_BOT_TOKEN!, fetcher);
-    let teamId: string, member: SlackObject;
+    let bound: { teamId: string; botUserId?: string }, member: SlackObject;
     try {
-      teamId = await workspace(bot);
+      bound = await workspace(bot);
       member = object((await bot.call("users.info", { user: id.sub })).user);
     } catch {
       throw new LoginError("unavailable");
     }
+    const teamId = bound.teamId;
     // Only full members of the bot's own workspace; no guests or external users.
     if (
       claimedTeam !== teamId ||
@@ -179,6 +203,7 @@ export async function completeLogin(
       member.is_stranger === true
     )
       throw new LoginError("forbidden");
+    return bound;
   } finally {
     // The user token is never needed; revoke it best-effort.
     if (typeof token.access_token === "string")

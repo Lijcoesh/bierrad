@@ -8,7 +8,16 @@
     "bot_user": {
       "display_name": "Koffierad",
       "always_online": false
-    }
+    },
+    "slash_commands": [
+      {
+        "command": "/koffierad",
+        "url": "https://bierrad-live.timzegveld.workers.dev/slack/commands",
+        "description": "Vraag een koffieronde aan",
+        "usage_hint": "[minuten]",
+        "should_escape": false
+      }
+    ]
   },
   "oauth_config": {
     "redirect_urls": [
@@ -20,8 +29,10 @@
       ],
       "bot": [
         "reactions:read",
+        "reactions:write",
         "users:read",
-        "chat:write"
+        "chat:write",
+        "commands"
       ]
     }
   },

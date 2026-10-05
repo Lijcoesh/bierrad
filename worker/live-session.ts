@@ -3,6 +3,7 @@ import { SlackApiClient, SlackError } from "./slack/api";
 import {
   SlackReactionParticipantSource,
   parseSlackPermalink,
+  type SlackSource,
 } from "./slack/source";
 import {
   reconcile,
@@ -12,6 +13,7 @@ import {
   MAX_REMINDER_POSTS,
 } from "./slack/state";
 import {
+  CHANNEL_GRANT,
   slackAllowed,
   slackCeiling,
   slackEnvironment,
@@ -19,9 +21,12 @@ import {
 } from "./slack/access";
 import { getCapabilities } from "../src/domain/capabilities";
 import { DurableObject } from "cloudflare:workers";
-import { equalHash, hashSecret, parseCapability } from "./auth";
+import { equalHash, hashSecret, parseCapability, randomHex } from "./auth";
+import { createSession } from "../src/domain/drawEngine";
+import { SCHEDULE_RETENTION_MS } from "../shared/retention";
 import {
   advance,
+  channelRefreshAt,
   executeScheduledDraw,
   START_DELAY_MS,
   mutate,
@@ -81,6 +86,43 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
     this.save(record);
     await this.ctx.storage.setAlarm(record.expiresAt);
     return new Date(record.expiresAt).toISOString();
+  }
+  /**
+   * A round of a channel-bound Koffierad: spectators only, one winner, the Slack
+   * call message as source and a fixed start. Nobody receives host rights.
+   */
+  async initializeChannelRound(
+    spectatorHash: string,
+    source: SlackSource,
+    startAt: number,
+    excludeUserIds: string[],
+  ): Promise<void> {
+    const hostHash = await hashSecret(randomHex());
+    if (this.read()) throw new Error("unavailable");
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS session (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), value TEXT NOT NULL)",
+    );
+    const now = Date.now();
+    const record = newSession(hostHash, spectatorHash, now, "coffee");
+    record.preferredCount = 1;
+    record.session = createSession(record.session.id, [], 1);
+    record.expiresAt = startAt + SCHEDULE_RETENTION_MS;
+    record.scheduledDraw = {
+      startAt: new Date(startAt).toISOString(),
+      status: "pending",
+    };
+    record.slack = {
+      grantHash: CHANNEL_GRANT,
+      grantExpiresAt: record.expiresAt,
+      mapping: {},
+      source: { ...source },
+      channelRound: true,
+      excludeUserIds: [...excludeUserIds],
+      // The first read waits a minute: right after posting only the bot reacted.
+      nextImportAt: now + 60000,
+    };
+    this.save(record);
+    await this.ctx.storage.setAlarm(nextDeadline(record));
   }
   private async expire() {
     for (const ws of this.ctx.getWebSockets()) {
@@ -396,6 +438,7 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
       this.broadcast(record);
     }
     await this.processSlackReminder();
+    await this.processChannelRefresh();
     await this.processScheduledDraw();
     await this.processSlackResult();
     const latest = this.read();
@@ -504,6 +547,26 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
       return;
     }
     settle(latest, result.status);
+  }
+  private async processChannelRefresh() {
+    const record = this.read();
+    if (!record || Date.now() >= record.expiresAt) return;
+    const at = channelRefreshAt(record);
+    if (at === undefined || at > Date.now()) return;
+    try {
+      // Slack errors are absorbed inside and push the next attempt back.
+      await this.importSlack(record, "host", {
+        type: "slackImport",
+        revision: record.revision,
+      });
+    } catch {
+      // Refused before any Slack call (for example revoked access): back off.
+      const current = this.read();
+      if (current?.slack && Date.now() < current.expiresAt) {
+        current.slack.nextImportAt = Date.now() + 60000;
+        this.save(current);
+      }
+    }
   }
   private async processScheduledDraw() {
     let record = this.read();
@@ -627,7 +690,7 @@ export class LiveSession extends DurableObject<Env & SlackSecrets> {
         new SlackApiClient(
           slackEnvironment(this.env, record.variant).SLACK_BOT_TOKEN!,
         ),
-      ).getParticipants(source);
+      ).getParticipants(source, state.excludeUserIds);
       const current = this.read();
       if (
         !current ||
