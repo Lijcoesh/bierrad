@@ -510,3 +510,7 @@ LocalSessionController en RemoteSessionController gebruiken dezelfde radcomponen
 Koffierad bepaalt uitsluitend **wie koffie haalt**, niet wie koffie zet of welke koffiesoort iemand drinkt. Dezelfde spanning, deterministische raderen en standalone bruikbaarheid gelden voor beide varianten. De website biedt een wissel en directe koffielink. Persoonlijke raden starten leeg met standaardinstellingen; eerder ingevoerde deelnemers kunnen per variant bewust worden hersteld; live-sessies hebben één onveranderlijke variant.
 
 Slack blijft de ingang: een aparte Koffierad-app importeert uitsluitend `:coffee:` op het gekozen hoofdbericht en publiceert de serveruitslag in dezelfde thread, met ☕ en officiële winnaarvermeldingen. Bier behoudt `:beers:`. Elke app heeft eigen servercredentials en organisator-starttoegang. Slashcommando's en wekelijks herhalende planning zijn niet geïmplementeerd. Een eenmalige automatische start is beschikbaar voor beide varianten.
+
+# Waterrad — uitbreiding 2026-10-05
+
+Het succes van Koffierad vraagt om een derde rad: **wie haalt het water voor de afdeling?** Waterrad heeft precies dezelfde features als Koffierad, met een fris blauw thema, 💧 als icoon en een eigen afsluiter: "Rondje gemeentepils van de zaak! Hydrateer ons trots." Het gebruikt bewust dezelfde Slack-app als koffie en telt uitsluitend `:droplet:`.

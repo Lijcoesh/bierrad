@@ -961,6 +961,37 @@ footer b {
 [data-variant="coffee"] .count-stepper {
   background: #ecddc9;
 }
+:root[data-variant="water"] {
+  color: #183b47;
+  background: #eef7f9;
+}
+[data-variant="water"] .primary {
+  background: #1f6f8b;
+  color: #f4fbfd;
+  border-color: #185a71;
+  box-shadow: 0 5px 0 #12475a;
+}
+[data-variant="water"] .primary:hover:not(:disabled) {
+  background: #2a809e;
+}
+[data-variant="water"] .friday-badge {
+  background: #d6ecf1;
+  border-color: #b5d9e3;
+}
+[data-variant="water"] .wheel-hub {
+  background: #f4fbfd;
+}
+[data-variant="water"] .variant-switch a[aria-current="page"] {
+  background: #1f6f8b;
+}
+[data-variant="water"] .final-result {
+  background: #dcf0f5;
+  border-color: #8cc4d4;
+}
+[data-variant="water"] .count,
+[data-variant="water"] .count-stepper {
+  background: #d9eef3;
+}
 
 .schedule-controls {
   margin-top: 16px;
@@ -1310,6 +1341,14 @@ footer b {
 [data-variant="coffee"] .participant-drawer > button,
 [data-variant="coffee"] .participant-drawer-panel {
   background: #fff8ee;
+}
+[data-variant="water"] .spectator .wheel-grid .wheel-reveal.revealed {
+  background: #7cc6d9;
+  color: #183b47;
+}
+[data-variant="water"] .participant-drawer > button,
+[data-variant="water"] .participant-drawer-panel {
+  background: #f7fcfd;
 }
 @keyframes count-pop {
   from {
