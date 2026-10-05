@@ -120,7 +120,7 @@ Een hostcapability bestaat uit een willekeurige 128-bit locator plus een onafhan
 | `GET /api/socket` upgrade | Geldige host of kijker | Snapshotupdates; alleen pingberichten toegestaan |
 | `GET /api/channel` | Geldige beheer- of aanvraaglink van een kanaal-Koffierad | Status, standaardwachttijd en lopende ronde |
 | `POST /api/channel` | Idem; beheer alleen met beheerlink | `requestRound` (1–30 minuten), `setDefaultMinutes`, `rotateRequestLink`, `unbind` |
-| `POST /slack/commands` | Uitsluitend met geldige Slack-handtekening | `/koffierad [minuten]` start een ronde in het gekoppelde kanaal |
+| `POST /slack/commands` | Uitsluitend met geldige Slack-handtekening | `/koffierad [minuten]` of `/waterrad [minuten]` start een koffie- of waterronde in het gekoppelde kanaal |
 
 HTTP gebruikt `Authorization: Bearer <capability>`. Browsers bieden bij WebSocket-upgrade `bierrad, auth.<capability>` als subprotocol aan; de server selecteert alleen `bierrad`. Geen capabilities in backend-URLs of querystrings. Commando's: `setParticipants` (namen, server maakt IDs), `setWinnerCount`, `setScheduledDraw` (ISO-tijd of null om te annuleren, optioneel met `spectatorCapability` om de kijklink vooraf in de Slack-thread te laten plaatsen), `startDraw`, `reset`, `endSession`. De client kan nooit officiële winnaars/instructies aanleveren. Backendrechten zijn bepalend; frontendcapabilities zijn alleen UX.
 
@@ -198,6 +198,8 @@ Iedere afdeling kan een eigen Koffierad aan een eigen Slack-kanaal koppelen via 
 ## Waterrad 💧
 
 Het derde rad: **wie haalt het water voor de afdeling?** Open `#/water` of kies 💧 Waterrad in de wissel bovenaan. Alles werkt zoals bij koffie (lokaal, live, Start met Slack via `#/water-slack`, plannen en kijklinks), met blauwe/aqua kleuren, een eigen icoon en eigen teksten ("Rondje gemeentepils van de zaak! Hydrateer ons trots."). `POST /api/sessions` accepteert ook `variant: "water"`. Water gebruikt bewust **dezelfde Slack-app als koffie** (geen nieuwe app of secrets) en telt uitsluitend **💧 `:droplet:`**-reacties. Zie [Waterrad in Slack](docs/slack-setup.md#waterrad).
+
+Een aan een kanaal gekoppeld Koffierad doet ook waterrondes: typ `/waterrad` (of `/waterrad 10`) in het kanaal of klik op **💧 Vraag een waterronde aan** op de vaste kanaalpagina. Het is dezelfde koppeling met dezelfde links; het vaste kanaalrad en de meekijklink kleuren automatisch mee met de ronde (blauw bij water, bruin bij koffie). Per kanaal loopt één ronde tegelijk, koffie of water, met samen maximaal 25 per 24 uur. Zie [waterrondes toevoegen](docs/slack-setup.md#waterrondes-toevoegen-waterrad).
 
 ## Linkvoorbeelden
 

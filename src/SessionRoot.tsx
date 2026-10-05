@@ -22,6 +22,7 @@ import {
   parseLiveRoute,
 } from "./sessions/liveNavigation";
 import { parseChannelRoute } from "./sessions/ChannelClient";
+import { isChannelVariant } from "../shared/channel";
 import {
   ChannelBindPage,
   ChannelViewPage,
@@ -215,9 +216,9 @@ function LiveBar({
           Start met Slack {theme.icon}
         </a>
       )}
-      {!live && apiUrl && theme.variant === "coffee" && (
+      {!live && apiUrl && isChannelVariant(theme.variant) && (
         <a className="button-link" href="#/koffie-koppelen">
-          Koppel aan een Slack-kanaal ☕
+          Koppel aan een Slack-kanaal {theme.icon}
         </a>
       )}
       {live?.role === "host" &&
@@ -322,10 +323,11 @@ function SlackLogin({ failure }: { failure?: SlackFailure }) {
           Log in met Slack {theme.icon}
         </a>
       )}
-      {theme.variant === "coffee" && (
+      {isChannelVariant(theme.variant) && (
         <p>
-          Liever een vast Koffierad voor je afdeling, waar iedereen een ronde kan
-          aanvragen? <a href="#/koffie-koppelen">Koppel het aan een Slack-kanaal</a>
+          Liever een vast rad voor je afdeling, waar iedereen een koffie- of
+          waterronde kan aanvragen?{" "}
+          <a href="#/koffie-koppelen">Koppel het aan een Slack-kanaal</a>
         </p>
       )}
       <p>

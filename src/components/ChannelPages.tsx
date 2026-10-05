@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
+  channelCopy,
+  channelVariants,
   DEFAULT_ROUND_MINUTES,
   MAX_ROUND_MINUTES,
   ROUND_MINUTE_CHOICES,
@@ -7,7 +9,10 @@ import {
   type ChannelCommand,
   type ChannelRound,
   type ChannelStatus,
+  type ChannelVariant,
 } from "../../shared/channel";
+import { themes } from "../../shared/variant";
+import { VariantContext } from "../Theme";
 import {
   channelBindUrl,
   ChannelApiError,
@@ -25,17 +30,35 @@ const clock = new Intl.DateTimeFormat("nl-NL", {
   hour: "2-digit",
   minute: "2-digit",
 });
-/** The name arrives with the first `/koffierad`; until then, no name. */
-function channelTitle(name?: string) {
-  return name ? `☕ Koffierad van #${name}` : "☕ Koffierad van dit kanaal";
+/** The name arrives with the first `/koffierad` or `/waterrad`; until then, no name. */
+function channelTitle(variant: ChannelVariant, name?: string) {
+  const { icon, name: wheel } = themes[variant];
+  return name ? `${icon} ${wheel} van #${name}` : `${icon} ${wheel} van dit kanaal`;
 }
-function useCoffeePage(title: string) {
+/** One binding serves coffee and water: the page follows the latest round. */
+function ChannelTheme({
+  variant,
+  title,
+  children,
+}: {
+  variant: ChannelVariant;
+  title?: string;
+  children: ReactNode;
+}) {
+  const theme = themes[variant];
   useEffect(() => {
-    document.documentElement.dataset.variant = "coffee";
-    document.title = title;
+    document.documentElement.dataset.variant = variant;
+    document.title = title ?? theme.name;
     const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-    if (icon) icon.href = "./coffee-icon.svg";
-  }, [title]);
+    if (icon) icon.href = theme.favicon;
+  }, [variant, title, theme]);
+  return (
+    <VariantContext.Provider value={variant}>{children}</VariantContext.Provider>
+  );
+}
+function roundLabel(variant: ChannelVariant) {
+  const round = channelCopy[variant].round;
+  return `${round[0].toUpperCase()}${round.slice(1)}`;
 }
 const bindFailures: Record<ChannelBindFailure, string> = {
   denied: "Inloggen bij Slack is geannuleerd.",
@@ -51,60 +74,62 @@ const bindFailures: Record<ChannelBindFailure, string> = {
 
 /** Bind a Koffierad to a Slack channel: Sign in with Slack, then a test post. */
 export function ChannelBindPage({ failure }: { failure?: ChannelBindFailure }) {
-  useCoffeePage("Koffierad koppelen");
   const api = configuredApiUrl();
   const [input, setInput] = useState("");
   const channel = parseChannelInput(input);
   return (
-    <div className="unavailable channel-page">
-      <h1>☕ Koffierad aan een kanaal koppelen</h1>
-      <ol className="channel-steps">
-        <li>
-          Nodig de Koffierad-bot uit in het kanaal: typ daar{" "}
-          <code>/invite @Koffierad</code>.
-        </li>
-        <li>
-          Kopieer de link van het kanaal (rechtsklik op de kanaalnaam →{" "}
-          <em>Kopiëren</em> → <em>Link kopiëren</em>) en plak hem hieronder.
-        </li>
-        <li>Log in met Slack. Het Koffierad plaatst dan een bevestiging in het kanaal.</li>
-      </ol>
-      {failure && <p role="alert">{bindFailures[failure]}</p>}
-      {api ? (
-        <form
-          className="channel-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (channel) location.assign(channelBindUrl(api, channel));
-          }}
-        >
-          <label htmlFor="channel-link">Kanaallink</label>
-          <input
-            id="channel-link"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="https://jouwbedrijf.slack.com/archives/C…"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          {input && !channel && (
-            <small role="status">Dit lijkt geen link naar een Slack-kanaal.</small>
-          )}
-          <button className="primary" type="submit" disabled={!channel}>
-            Log in en koppel ☕
-          </button>
-        </form>
-      ) : (
-        <p>Koppelen is hier nog niet ingesteld.</p>
-      )}
-      <p className="helper">
-        Iedere afdeling kan een eigen kanaal koppelen. Wie de aanvraaglink heeft
-        of <code>/koffierad</code> typt in het kanaal, kan een koffieronde starten.
-      </p>
-      <p>
-        <a href="#/coffee">Liever handmatig draaien</a>
-      </p>
-    </div>
+    <ChannelTheme variant="coffee" title="Koffierad koppelen">
+      <div className="unavailable channel-page">
+        <h1>☕💧 Koffierad aan een kanaal koppelen</h1>
+        <ol className="channel-steps">
+          <li>
+            Nodig de Koffierad-bot uit in het kanaal: typ daar{" "}
+            <code>/invite @Koffierad</code>.
+          </li>
+          <li>
+            Kopieer de link van het kanaal (rechtsklik op de kanaalnaam →{" "}
+            <em>Kopiëren</em> → <em>Link kopiëren</em>) en plak hem hieronder.
+          </li>
+          <li>Log in met Slack. Het Koffierad plaatst dan een bevestiging in het kanaal.</li>
+        </ol>
+        {failure && <p role="alert">{bindFailures[failure]}</p>}
+        {api ? (
+          <form
+            className="channel-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (channel) location.assign(channelBindUrl(api, channel));
+            }}
+          >
+            <label htmlFor="channel-link">Kanaallink</label>
+            <input
+              id="channel-link"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="https://jouwbedrijf.slack.com/archives/C…"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            {input && !channel && (
+              <small role="status">Dit lijkt geen link naar een Slack-kanaal.</small>
+            )}
+            <button className="primary" type="submit" disabled={!channel}>
+              Log in en koppel ☕
+            </button>
+          </form>
+        ) : (
+          <p>Koppelen is hier nog niet ingesteld.</p>
+        )}
+        <p className="helper">
+          Iedere afdeling kan een eigen kanaal koppelen. Wie de aanvraaglink heeft
+          of <code>/koffierad</code> of <code>/waterrad</code> typt in het kanaal,
+          kan een koffie- of waterronde starten.
+        </p>
+        <p>
+          <a href="#/coffee">Liever handmatig draaien</a>
+        </p>
+      </div>
+    </ChannelTheme>
   );
 }
 
@@ -116,7 +141,6 @@ export function ChannelWheelPage({
   capability: string;
   requestCapability?: string;
 }) {
-  useCoffeePage("Koffierad");
   const api = configuredApiUrl();
   const [status, setStatus] = useState<ChannelStatus>();
   const [minutes, setMinutes] = useState<number>();
@@ -146,7 +170,7 @@ export function ChannelWheelPage({
         if ((error as { code?: string }).code === "unavailable") setGone(true);
       });
     refresh();
-    // Picks up rounds started elsewhere (for example with /koffierad).
+    // Picks up rounds started elsewhere (for example with /koffierad or /waterrad).
     const timer = setInterval(refresh, 10000);
     window.addEventListener("focus", refresh);
     return () => {
@@ -173,27 +197,33 @@ export function ChannelWheelPage({
   }
   if (!api || gone)
     return (
-      <div className="unavailable channel-page">
-        <h1>☕ Dit Koffierad is niet beschikbaar.</h1>
-        <p>
-          {gone
-            ? "De koppeling is opgeheven of deze link is vervangen. Vraag de beheerder van het kanaal om de nieuwe link."
-            : "Live koffierondes zijn hier nog niet ingesteld."}
-        </p>
-        <a href="#/coffee">Open een lokaal Koffierad</a>
-      </div>
+      <ChannelTheme variant={status?.variant ?? "coffee"}>
+        <div className="unavailable channel-page">
+          <h1>☕ Dit Koffierad is niet beschikbaar.</h1>
+          <p>
+            {gone
+              ? "De koppeling is opgeheven of deze link is vervangen. Vraag de beheerder van het kanaal om de nieuwe link."
+              : "Live koffie- en waterrondes zijn hier nog niet ingesteld."}
+          </p>
+          <a href="#/coffee">Open een lokaal Koffierad</a>
+        </div>
+      </ChannelTheme>
     );
   if (!status)
     return (
-      <div className="unavailable channel-page">
-        <p className="notice">{notice || "Het Koffierad wordt gezet…"}</p>
-      </div>
+      <ChannelTheme variant="coffee">
+        <div className="unavailable channel-page">
+          <p className="notice">{notice || "Het rad wordt gezet…"}</p>
+        </div>
+      </ChannelTheme>
     );
+  const variant = status.round?.variant ?? status.variant ?? "coffee";
   const chosen = minutes ?? status.defaultMinutes ?? DEFAULT_ROUND_MINUTES;
   const choices = [
     ...new Set([...ROUND_MINUTE_CHOICES, status.defaultMinutes]),
   ].sort((a, b) => a - b);
-  const request = () => void act({ type: "requestRound", minutes: chosen });
+  const request = (kind: ChannelVariant) =>
+    void act({ type: "requestRound", minutes: chosen, variant: kind });
   const admin = status.role === "admin" && (
     <ChannelAdmin
       status={status}
@@ -206,15 +236,15 @@ export function ChannelWheelPage({
   // The fixed channel page: the latest round's live wheel, then the next request.
   if (status.round)
     return (
-      <>
+      <ChannelTheme variant={variant}>
         <div className="channel-live">
           <div className="channel-strip" aria-live="polite">
-            <strong>{channelTitle(status.channelName)}</strong>
+            <strong>{channelTitle(variant, status.channelName)}</strong>
             {status.round.active ? (
               <span>
-                Koffieronde! Het rad draait om{" "}
-                {clock.format(Date.parse(status.round.startAt))}. Klik op ☕
-                onder de oproep in Slack om mee te doen.
+                {roundLabel(variant)}! Het rad draait om{" "}
+                {clock.format(Date.parse(status.round.startAt))}. Klik op{" "}
+                {themes[variant].icon} onder de oproep in Slack om mee te doen.
               </span>
             ) : (
               <span className="channel-strip-request">
@@ -232,13 +262,16 @@ export function ChannelWheelPage({
                     ))}
                   </select>
                 </label>
-                <button
-                  className="primary"
-                  disabled={pending || status.roundsLeft === 0}
-                  onClick={request}
-                >
-                  ☕ Vraag een koffieronde aan
-                </button>
+                {channelVariants.map((kind) => (
+                  <button
+                    key={kind}
+                    className="primary"
+                    disabled={pending || status.roundsLeft === 0}
+                    onClick={() => request(kind)}
+                  >
+                    {themes[kind].icon} {roundLabel(kind)}
+                  </button>
+                ))}
               </span>
             )}
             {notice && <small role="status">{notice}</small>}
@@ -256,66 +289,73 @@ export function ChannelWheelPage({
           />
         </div>
         {admin && <div className="unavailable channel-page">{admin}</div>}
-      </>
+      </ChannelTheme>
     );
   return (
-    <div className="unavailable channel-page">
-      <span className="friday-badge">{channelTitle(status.channelName)}</span>
-      <h1>Tijd voor koffie?</h1>
-      <section className="channel-request">
-        <p>
-          Er komt een oproep in het Slack-kanaal. Wie op ☕ klikt, doet mee. Na de
-          wachttijd draait het rad hier en kiest het één koffiehaler. Deze pagina
-          blijft altijd het rad van dit kanaal.
-        </p>
-        <fieldset className="minute-choices">
-          <legend>Het rad draait over</legend>
-          {choices.map((m) => (
+    <ChannelTheme variant={variant}>
+      <div className="unavailable channel-page">
+        <span className="friday-badge">{channelTitle(variant, status.channelName)}</span>
+        <h1>Tijd voor koffie of water?</h1>
+        <section className="channel-request">
+          <p>
+            Er komt een oproep in het Slack-kanaal. Wie op ☕ of 💧 klikt, doet mee.
+            Na de wachttijd draait het rad hier en kiest het één haler. Deze pagina
+            blijft altijd het rad van dit kanaal.
+          </p>
+          <fieldset className="minute-choices">
+            <legend>Het rad draait over</legend>
+            {choices.map((m) => (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={m === chosen}
+                onClick={() => setMinutes(m)}
+              >
+                {m} min
+              </button>
+            ))}
+          </fieldset>
+          {channelVariants.map((kind) => (
             <button
-              key={m}
-              type="button"
-              aria-pressed={m === chosen}
-              onClick={() => setMinutes(m)}
+              key={kind}
+              className="primary spin-button"
+              data-variant={kind}
+              disabled={pending || status.roundsLeft === 0}
+              onClick={() => request(kind)}
             >
-              {m} min
+              {themes[kind].icon} VRAAG EEN {channelCopy[kind].round.toUpperCase()} AAN
             </button>
           ))}
-        </fieldset>
-        <button
-          className="primary spin-button"
-          disabled={pending || status.roundsLeft === 0}
-          onClick={request}
-        >
-          ☕ VRAAG EEN KOFFIERONDE AAN
-        </button>
-        {status.roundsLeft === 0 && (
-          <p className="helper">Vandaag zijn er genoeg rondes geweest. Morgen weer!</p>
-        )}
-      </section>
-      {notice && <p role="status">{notice}</p>}
-      <p className="helper">
-        Liever vanuit Slack? Typ <code>/koffierad</code> of{" "}
-        <code>/koffierad 10</code> in het kanaal.
-      </p>
-      {status.viewerCapability && (
+          {status.roundsLeft === 0 && (
+            <p className="helper">Vandaag zijn er genoeg rondes geweest. Morgen weer!</p>
+          )}
+        </section>
+        {notice && <p role="status">{notice}</p>}
         <p className="helper">
-          Op een ander scherm meekijken, zonder rondes te kunnen starten? Typ daar{" "}
-          <code className="channel-view-link">
-            {channelViewLink(status.viewerCapability)}
-          </code>
+          Liever vanuit Slack? Typ <code>/koffierad</code> of{" "}
+          <code>/waterrad</code> in het kanaal, met bijvoorbeeld{" "}
+          <code>/waterrad 10</code> voor tien minuten.
         </p>
-      )}
-      {admin}
-    </div>
+        {status.viewerCapability && (
+          <p className="helper">
+            Op een ander scherm meekijken, zonder rondes te kunnen starten? Typ daar{" "}
+            <code className="channel-view-link">
+              {channelViewLink(status.viewerCapability)}
+            </code>
+          </p>
+        )}
+        {admin}
+      </div>
+    </ChannelTheme>
   );
 }
 
 /** The view-only word link: the latest round's wheel, nothing to request or manage. */
 export function ChannelViewPage({ capability }: { capability: string }) {
-  useCoffeePage("Koffierad");
   const api = configuredApiUrl();
   const [round, setRound] = useState<ChannelRound | null>();
   const [channelName, setChannelName] = useState<string>();
+  const [shown, setShown] = useState<ChannelVariant>("coffee");
   const [gone, setGone] = useState(false);
   useEffect(() => {
     if (!api) return;
@@ -326,6 +366,7 @@ export function ChannelViewPage({ capability }: { capability: string }) {
           if (active && result.type === "view") {
             setRound(result.round ?? null);
             setChannelName(result.channelName);
+            setShown(result.round?.variant ?? result.variant ?? "coffee");
           }
         },
         (error: Error) => {
@@ -344,49 +385,57 @@ export function ChannelViewPage({ capability }: { capability: string }) {
   }, [api, capability]);
   if (!api || gone)
     return (
-      <div className="unavailable channel-page">
-        <h1>☕ Dit Koffierad is niet beschikbaar.</h1>
-        <p>
-          {gone
-            ? "Deze meekijklink is vervangen of de koppeling is opgeheven. Vraag de beheerder van het kanaal om de nieuwe link."
-            : "Live koffierondes zijn hier nog niet ingesteld."}
-        </p>
-        <a href="#/coffee">Open een lokaal Koffierad</a>
-      </div>
+      <ChannelTheme variant={shown}>
+        <div className="unavailable channel-page">
+          <h1>☕ Dit Koffierad is niet beschikbaar.</h1>
+          <p>
+            {gone
+              ? "Deze meekijklink is vervangen of de koppeling is opgeheven. Vraag de beheerder van het kanaal om de nieuwe link."
+              : "Live koffie- en waterrondes zijn hier nog niet ingesteld."}
+          </p>
+          <a href="#/coffee">Open een lokaal Koffierad</a>
+        </div>
+      </ChannelTheme>
     );
   if (round === undefined)
     return (
-      <div className="unavailable channel-page">
-        <p className="notice">Het Koffierad wordt gezet…</p>
-      </div>
+      <ChannelTheme variant={shown}>
+        <div className="unavailable channel-page">
+          <p className="notice">Het rad wordt gezet…</p>
+        </div>
+      </ChannelTheme>
     );
   if (round)
     return (
-      <div className="channel-live">
-        <div className="channel-strip" aria-live="polite">
-          <strong>{channelTitle(channelName)}</strong>
-          <span>
-            {round.active
-              ? `Koffieronde! Het rad draait om ${clock.format(Date.parse(round.startAt))}. Klik op ☕ onder de oproep in Slack om mee te doen.`
-              : "Typ /koffierad in het kanaal voor een nieuwe ronde."}
-          </span>
+      <ChannelTheme variant={shown}>
+        <div className="channel-live">
+          <div className="channel-strip" aria-live="polite">
+            <strong>{channelTitle(shown, channelName)}</strong>
+            <span>
+              {round.active
+                ? `${roundLabel(shown)}! Het rad draait om ${clock.format(Date.parse(round.startAt))}. Klik op ${themes[shown].icon} onder de oproep in Slack om mee te doen.`
+                : "Typ /koffierad of /waterrad in het kanaal voor een nieuwe ronde."}
+            </span>
+          </div>
+          <ChannelLive
+            key={round.spectatorCapability}
+            apiUrl={api}
+            capability={round.spectatorCapability}
+          />
         </div>
-        <ChannelLive
-          key={round.spectatorCapability}
-          apiUrl={api}
-          capability={round.spectatorCapability}
-        />
-      </div>
+      </ChannelTheme>
     );
   return (
-    <div className="unavailable channel-page" aria-live="polite">
-      <span className="friday-badge">{channelTitle(channelName)}</span>
-      <h1>Tijd voor koffie?</h1>
-      <p>
-        Typ <code>/koffierad</code> in het Slack-kanaal. Zodra er een ronde is,
-        draait het rad hier vanzelf.
-      </p>
-    </div>
+    <ChannelTheme variant={shown}>
+      <div className="unavailable channel-page" aria-live="polite">
+        <span className="friday-badge">{channelTitle(shown, channelName)}</span>
+        <h1>Tijd voor koffie of water?</h1>
+        <p>
+          Typ <code>/koffierad</code> of <code>/waterrad</code> in het
+          Slack-kanaal. Zodra er een ronde is, draait het rad hier vanzelf.
+        </p>
+      </div>
+    </ChannelTheme>
   );
 }
 
@@ -434,7 +483,7 @@ function ChannelAdmin({
       <h2>Beheer</h2>
       <p className="helper">
         Bewaar deze beheerpagina zelf; deel alleen de kanaallink (het vaste rad). Een koppeling
-        verloopt na 90 dagen zonder koffierondes (nu tot{" "}
+        verloopt na 90 dagen zonder rondes (nu tot{" "}
         {new Date(status.expiresAt).toLocaleDateString("nl-NL")}).
       </p>
       {requestCapability && (
@@ -444,7 +493,7 @@ function ChannelAdmin({
             void navigator.clipboard.writeText(channelLink(requestCapability)).then(
               () =>
                 setNotice(
-                  "Link gekopieerd. Iedereen met deze link kan meekijken en een koffieronde starten.",
+                  "Link gekopieerd. Iedereen met deze link kan meekijken en een koffie- of waterronde starten.",
                 ),
               () => setNotice("Kopiëren lukt niet. Sta klembordtoegang toe."),
             )
