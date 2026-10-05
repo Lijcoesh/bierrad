@@ -51,6 +51,14 @@ export function countdownDigit(remainingMs: number): number | undefined {
   const seconds = Math.ceil(remainingMs / 1000);
   return seconds <= 3 ? seconds : undefined;
 }
+/** Spectators see "nog m:ss" before a planned start, only within the last hour. */
+export const TIME_LEFT_SHOWN_MS = 3600000;
+/** "2:14" for the time until a planned start; undefined when too far or already due. */
+export function timeLeftLabel(remainingMs: number): string | undefined {
+  if (remainingMs <= 0 || remainingMs > TIME_LEFT_SHOWN_MS) return undefined;
+  const seconds = Math.ceil(remainingMs / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
 export function countLabel(
   count: number,
   singular: string,

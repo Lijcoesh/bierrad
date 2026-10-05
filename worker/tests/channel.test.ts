@@ -20,7 +20,7 @@ import {
 import { queueChannelNotice, resultBody } from "../slack/state";
 import { SlackApiClient } from "../slack/api";
 import { SlackReactionParticipantSource } from "../slack/source";
-import { parseChannelInput } from "../../shared/channel";
+import { parseChannelInput, roundStartAt } from "../../shared/channel";
 import type { ChannelCommandResult } from "../../shared/channel";
 import type { PublicBeerWheelSession } from "../../shared/protocol";
 
@@ -106,11 +106,20 @@ test("channel input accepts only Slack channel IDs and links", () => {
     assert.equal(parseChannelInput(bad), null, bad);
 });
 
+test("rounds start on the next whole minute, never sooner than asked", () => {
+  const minute = Date.parse("2026-10-05T13:03:00Z");
+  assert.equal(roundStartAt(minute + 37000, 5), minute + 6 * 60000);
+  assert.equal(roundStartAt(minute + 1, 1), minute + 2 * 60000);
+  assert.equal(roundStartAt(minute, 5), minute + 5 * 60000);
+  for (const now of [minute + 1, minute + 59999])
+    assert.ok(roundStartAt(now, 3) - now >= 3 * 60000);
+});
+
 test("channel messages are fixed text with server-built links, never broadcast or unfurled", () => {
   const link = "https://example.test/#/live/one-two-three-four-five";
   const now = Date.parse("2026-10-05T08:00:00Z");
-  const call = callBody("C00000001", link, now + 5 * 60000, now);
-  assert.match(call.text, /^☕ Koffieronde! .*\nOver 5 minuten \(10:05\)/);
+  const call = callBody("C00000001", link, now + 5 * 60000);
+  assert.match(call.text, /^☕ Koffieronde! .*\nOm 10:05 draait het Koffierad/);
   assert.equal(call.unfurl_links, false);
   assert.equal(call.link_names, false);
   assert.equal("thread_ts" in call, false);
@@ -120,8 +129,8 @@ test("channel messages are fixed text with server-built links, never broadcast o
     url: link,
     text: "Kijk live mee",
   });
-  const water = callBody("C00000001", link, now + 60000, now, "water");
-  assert.match(water.text, /^💧 Waterronde! Klik op 💧 hieronder .*\nOver 1 minuut \(10:01\) draait het Waterrad en kiest het één waterhaler\./);
+  const water = callBody("C00000001", link, now + 60000, "water");
+  assert.match(water.text, /^💧 Waterronde! Klik op 💧 hieronder .*\nOm 10:01 draait het Waterrad en kiest het één waterhaler\./);
   assert.doesNotMatch(water.text, /☕|koffie/i);
   assert.equal(water.unfurl_links, false);
   assert.equal("reply_broadcast" in water, false);
@@ -451,7 +460,10 @@ test(
       assert.equal(reactionsAdded.length, 1);
       assert.equal(reactionsAdded[0].name, "coffee");
       const callTs = reactionsAdded[0].timestamp as string;
-      assert.ok(Math.abs(Date.parse(round.startAt) - Date.now() - 5 * 60000) < 5000);
+      // On a whole minute, so the shown HH:mm is the real start.
+      const wait = Date.parse(round.startAt) - Date.now();
+      assert.equal(Date.parse(round.startAt) % 60000, 0);
+      assert.ok(wait > 5 * 60000 - 5000 && wait <= 6 * 60000, String(wait));
 
       // One round at a time, from either entry point.
       assert.equal((await api(requester, { type: "requestRound", minutes: 2 })).status, 409);
