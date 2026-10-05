@@ -118,6 +118,9 @@ Een hostcapability bestaat uit een willekeurige 128-bit locator plus een onafhan
 | `GET /api/session` | Geldige host of kijker | Veilige snapshot, servertijd en rol |
 | `POST /api/command` | Geldige host | Strikt getypeerd commando met actuele revisie |
 | `GET /api/socket` upgrade | Geldige host of kijker | Snapshotupdates; alleen pingberichten toegestaan |
+| `GET /api/channel` | Geldige beheer- of aanvraaglink van een kanaal-Koffierad | Status, standaardwachttijd en lopende ronde |
+| `POST /api/channel` | Idem; beheer alleen met beheerlink | `requestRound` (1–30 minuten), `setDefaultMinutes`, `rotateRequestLink`, `unbind` |
+| `POST /slack/commands` | Uitsluitend met geldige Slack-handtekening | `/koffierad [minuten]` start een ronde in het gekoppelde kanaal |
 
 HTTP gebruikt `Authorization: Bearer <capability>`. Browsers bieden bij WebSocket-upgrade `bierrad, auth.<capability>` als subprotocol aan; de server selecteert alleen `bierrad`. Geen capabilities in backend-URLs of querystrings. Commando's: `setParticipants` (namen, server maakt IDs), `setWinnerCount`, `setScheduledDraw` (ISO-tijd of null om te annuleren, optioneel met `spectatorCapability` om de kijklink vooraf in de Slack-thread te laten plaatsen), `startDraw`, `reset`, `endSession`. De client kan nooit officiële winnaars/instructies aanleveren. Backendrechten zijn bepalend; frontendcapabilities zijn alleen UX.
 
@@ -186,7 +189,11 @@ SessionController → Draw Engine → DrawInstruction → Wheel Renderers
 
 Naast Bierrad is er **Koffierad: wie haalt de volgende koffie?** Kies bovenaan je variant of open de site met `#/coffee` (bier: `#/beer`; de bestaande lege route blijft Bierrad). Beide gebruiken dezelfde radlogica. Koffie heeft warme crème-/espressokleuren en eigen teksten en een apart opgeslagen deelnemerslijst voor handmatig herstel. Beide varianten starten leeg met de standaard aantalvoorkeur. Wisselen start een lokale variant; tijdens draaien is de wissel geblokkeerd. Er is geen permanente uitslaghistorie.
 
-De variant van een live-sessie staat vanaf creatie vast op de server; host en kijkers ontvangen hetzelfde thema. Oude sessies en links blijven bier. `POST /api/sessions` accepteert `{}` voor bier of een body met uitsluitend `variant`, met waarde `beer` of `coffee`. Koffie krijgt een **eigen Slack-app** met eigen servercredentials, eigen inloggen, `:coffee:`-reacties en koffie-uitslagen. Zie [Koffierad instellen](docs/slack-setup.md#aparte-koffierad-app). De implementatie gebruikt Sign in with Slack, geen slashcommando's of automatische kanaalposts.
+De variant van een live-sessie staat vanaf creatie vast op de server; host en kijkers ontvangen hetzelfde thema. Oude sessies en links blijven bier. `POST /api/sessions` accepteert `{}` voor bier of een body met uitsluitend `variant`, met waarde `beer` of `coffee`. Koffie krijgt een **eigen Slack-app** met eigen servercredentials, eigen inloggen, `:coffee:`-reacties en koffie-uitslagen. Zie [Koffierad instellen](docs/slack-setup.md#aparte-koffierad-app).
+
+### Live Koffierad per Slack-kanaal
+
+Iedere afdeling kan een eigen Koffierad aan een eigen Slack-kanaal koppelen via `#/koffie-koppelen` (inloggen met Slack, daarna plaatst de bot een bevestiging in het kanaal). Daarna kan **iedereen** een koffieronde aanvragen: met de aanvraaglink (`#/koffie/<link>`) of door in het kanaal `/koffierad` of `/koffierad 10` te typen. De aanvrager kiest binnen hoeveel minuten het rad draait (standaard 5). De bot plaatst een oproep in het kanaal en zet er zelf al een ☕-reactie onder, zodat meedoen één klik is; die botreactie telt nooit mee. Kijkers zien het rad vollopen. Na de wachttijd draait het rad op de server, kiest het precies één koffiehaler en meldt de bot die in de thread van de oproep. Doet niemand mee, dan staat dat in de thread. De beheerlink (`#/koffie-beheer/…`) kan de standaardwachttijd aanpassen, een nieuwe aanvraaglink maken en ontkoppelen. Zie [kanaal koppelen](docs/slack-setup.md#koffierad-aan-een-kanaal-koppelen) en de [securityreview](docs/channel-security-review.md).
 
 ## Linkvoorbeelden
 

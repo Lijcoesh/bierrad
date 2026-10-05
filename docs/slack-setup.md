@@ -82,7 +82,7 @@ PNG opnieuw exporteren zonder projectdependency: `npx --yes --registry=https://r
 
 Maak een **nieuwe** app From a manifest met [slack-coffee-app-manifest.json](slack-coffee-app-manifest.json), installeer haar in de gewenste workspace en nodig de Koffierad-bot uit in het koffiekanaal. De bestaande Bierrad-app blijft bestaan. Upload [coffee-icon.png](../public/coffee-icon.png) (1024 × 1024) bij Basic Information → Display Information → App icon. De vectorbron is [coffee-icon.svg](../public/coffee-icon.svg).
 
-De scopes zijn dezelfde minimale scopes als bij bier: bot `reactions:read`, `users:read`, `chat:write` en user `openid`. Er zijn geen slashcommando's, events, webhooks of signing secrets. Organisatoren loggen in met **Start met Slack** op het Koffierad en collega's reageren met **☕ `:coffee:`** op het gekozen bericht.
+De scopes zijn dezelfde minimale scopes als bij bier: bot `reactions:read`, `users:read`, `chat:write` en user `openid`, plus `reactions:write` en `commands` voor het [kanaal-Koffierad](#koffierad-aan-een-kanaal-koppelen). Het slashcommando `/koffierad` is het enige inkomende Slack-verzoek en vereist het signing secret; er zijn geen events of webhooks. Organisatoren loggen in met **Start met Slack** op het Koffierad en collega's reageren met **☕ `:coffee:`** op het gekozen bericht.
 
 Bewaar het **nieuwe** bot-token interactief, uitsluitend in het volgende Worker-secret:
 
@@ -103,3 +103,37 @@ Publicatievolgorde: eerst de compatibele Worker, vervolgens de frontend; configu
 De host kan vijfminutenrefresh aanzetten zolang het hostscherm openstaat. Dit bewaart geen deelnemers of toegang in browseropslag. De live-server kan daarnaast een eenmalige start tot 30 dagen vooruit bewaren en de sessie zo nodig verlengen tot één uur daarna (standaard vrijdag 15.45, Europe/Amsterdam). De eindcontrole van Slack loopt op de server en werkt ook zonder hostscherm. Pas na een geslaagde controle volgt de normale trekking en threaduitslag; bij fouten wordt overgeslagen. Een normale import heeft een cooldown van een minuut. De eindcontrole heeft een aparte limiet van één per minuut en zet ook de normale cooldown; een expliciete Slack-retrydeadline geldt voor beide. Zo kan een laatste controle na een recente reguliere import plaatsvinden, met maximaal twee imports per minuut per sessie. Geen nieuwe Slack-scopes, cronconfiguratie of serversecrets nodig. Wekelijkse herhaling is niet inbegrepen.
 
 Optioneel plaatst de server twee minuten voor de geplande start de kijklink in dezelfde thread (aan te vinken bij het plannen, standaard aan). Dit gebruikt de bestaande `chat:write`-scope, zonder unfurl of kanaalbroadcast, met hooguit vijf herinneringen per sessie. De link-basis komt uit de publieke Worker-variabele `FRONTEND_URL`, die al voor Sign in with Slack is ingesteld.
+
+## Koffierad aan een kanaal koppelen
+
+Hiermee krijgt iedere afdeling een vast Koffierad in een eigen kanaal, waar iedereen een koffieronde kan aanvragen. Dit gebruikt de bestaande Koffierad-app; Bierrad verandert niet.
+
+### Eenmalig in de Koffierad-app
+
+1. Werk de app bij met het nieuwe [manifest](slack-coffee-app-manifest.json) (App Manifest in de appinstellingen). Nieuw zijn de bot scopes `reactions:write` (de bot zet zelf de eerste ☕ onder zijn oproep) en `commands`, plus het slashcommando `/koffierad` met als Request URL `https://bierrad-live.timzegveld.workers.dev/slack/commands`. Herinstalleer de app als Slack daarom vraagt; het bottoken blijft meestal gelijk, anders werk je `COFFEE_SLACK_BOT_TOKEN` bij.
+2. Kopieer onder **Basic Information → App Credentials** het **Signing Secret** en bewaar het uitsluitend als Worker-secret, interactief vanuit je eigen terminal:
+
+```sh
+npx wrangler secret put COFFEE_SLACK_SIGNING_SECRET --env=""
+```
+
+3. Publiceer eerst de Worker (die bevat de nieuwe Durable Object-migratie `v2` voor `ChannelWheel`) en daarna de frontend.
+
+### Per kanaal
+
+1. Nodig de bot uit in het kanaal: `/invite @Koffierad`.
+2. Open `https://timzegveld.github.io/bierrad/#/koffie-koppelen` (ook bereikbaar via **Koppel aan een Slack-kanaal** op het Koffierad), plak de kanaallink en log in met Slack. Alleen volwaardige leden van de workspace kunnen koppelen.
+3. De bot plaatst een bevestiging met de aanvraaglink in het kanaal. Jij komt op de **beheerpagina**: bewaar die link zelf, want hij wordt nergens anders getoond. Opnieuw koppelen van hetzelfde kanaal maakt nieuwe links en laat de oude vervallen.
+
+### Een ronde
+
+- Aanvragen via de aanvraaglink (keuze 1, 2, 3, 5, 10 of 15 minuten, standaard 5) of met `/koffierad` / `/koffierad 10` (1 tot 30 minuten) in het kanaal. Het slashcommando antwoordt alleen zichtbaar voor de aanvrager.
+- De bot plaatst een oproep in het kanaal met een kijklink en zet er direct een ☕ onder. Collega's klikken die ☕ aan. De botreactie telt nooit mee: de bot wordt op gebruikers-ID én als bot uitgefilterd.
+- Elke minuut leest de server de reacties, zodat kijkers het rad zien vollopen. Vlak voor de start volgt de normale eindcontrole. Daarna draait het rad met precies één winnaar, die met @vermelding in de thread van de oproep wordt gemeld. Zonder deelnemers, of als de reacties niet te lezen zijn, plaatst de bot daar een vaste melding.
+- Per kanaal loopt er hooguit één ronde tegelijk, met maximaal 20 rondes per 24 uur. Er wordt niet vermeld wie de ronde aanvroeg.
+
+### Beheer en intrekken
+
+Op de beheerpagina kun je de standaardwachttijd kiezen, een nieuwe aanvraaglink maken (de oude, ook die in Slack, werkt dan niet meer) en ontkoppelen. Een koppeling verloopt vanzelf na 90 dagen zonder rondes. Intrekken voor alle kanalen: verwijder `COFFEE_SLACK_SIGNING_SECRET` (alleen het slashcommando) of `COFFEE_SLACK_CLIENT_SECRET`/`COFFEE_SLACK_BOT_TOKEN` (alles van het Koffierad).
+
+Beperkingen: de aanvraaglink is bearer-toegang. Wie hem heeft, kan rondes starten en meekijken, ook buiten het kanaal als hij wordt doorgestuurd. De bot heeft geen `channels:read`, dus de beheerpagina toont geen kanaalnaam. Een onzekere Slack-post bij het aanvragen wordt niet herhaald: controleer dan het kanaal. Test na installatie met synthetische testaccounts dat de botreactie niet meetelt, `/koffierad` in een niet-gekoppeld kanaal een uitleg geeft en precies één threaduitslag verschijnt.

@@ -8,12 +8,16 @@ export interface SlackSecrets {
   COFFEE_SLACK_BOT_TOKEN?: string;
   COFFEE_SLACK_CLIENT_ID?: string;
   COFFEE_SLACK_CLIENT_SECRET?: string;
+  /** Verifies `/koffierad` slash commands; only the Koffierad app receives requests. */
+  COFFEE_SLACK_SIGNING_SECRET?: string;
   SLACK_BOT_TOKEN?: string;
   SLACK_CLIENT_ID?: string;
   SLACK_CLIENT_SECRET?: string;
 }
 /** The grant marker stored on every login-started Slack session. */
 export const LOGIN_GRANT = "slack-login";
+/** Marks rounds started by a channel-bound Koffierad (bound after Sign in with Slack). */
+export const CHANNEL_GRANT = "slack-channel";
 /** Fixed at creation: a full 30-day schedule plus its retention hour. */
 export const LOGIN_CEILING_MS = MAX_SCHEDULE_AHEAD_MS + SCHEDULE_RETENTION_MS;
 export function loginConfigured(env: SlackSecrets): boolean {
@@ -23,12 +27,12 @@ export function loginConfigured(env: SlackSecrets): boolean {
     /^\d{1,20}\.\d{1,20}$/.test(env.SLACK_CLIENT_ID ?? "")
   );
 }
-/** Only login-started sessions hold Slack rights; anything else fails closed. */
+/** Only login-started sessions and channel rounds hold Slack rights; anything else fails closed. */
 export function slackAllowed(
   hash: string | undefined,
   env: SlackSecrets,
 ): boolean {
-  return hash === LOGIN_GRANT && loginConfigured(env);
+  return (hash === LOGIN_GRANT || hash === CHANNEL_GRANT) && loginConfigured(env);
 }
 /** Revalidated scheduling ceiling, or undefined when Slack access is gone. */
 export function slackCeiling(

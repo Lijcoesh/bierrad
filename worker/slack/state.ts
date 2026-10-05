@@ -6,12 +6,15 @@ import type { StoredSession } from "../session";
 import { RequestError } from "../session";
 import type { SlackPerson, SlackSource } from "./source";
 import { SlackApiClient, SlackError } from "./api";
+export type ChannelNotice = "empty" | "unreadable";
 export interface SlackJob {
   drawId: string;
   source: SlackSource;
   names: string[];
   /** Private, frozen in winner order; absent on jobs created before mentions shipped. */
   mentionIds?: (string | null)[];
+  /** Channel rounds without a draw: a fixed notice instead of winners. */
+  notice?: ChannelNotice;
   status: "pending" | "posting" | "posted" | "failed" | "uncertain";
   readyAt: number;
   attemptedAt?: number;
@@ -52,6 +55,10 @@ export interface SlackState {
   job?: SlackJob;
   reminder?: SlackReminder;
   reminderPosts?: number;
+  /** Started by a channel-bound Koffierad: no host, refreshes itself until the draw. */
+  channelRound?: boolean;
+  /** Private: the bot's own user, whose prefilled reaction never counts. */
+  excludeUserIds?: string[];
 }
 /** Stable opaque identity; numbered display labels distinguish equal names without Slack IDs. */
 export function reconcile(
@@ -113,7 +120,53 @@ export function queueResult(record: StoredSession) {
     ),
   };
 }
+/** A channel round that ended without a draw still closes its thread. */
+export function queueChannelNotice(
+  record: StoredSession,
+  notice: ChannelNotice,
+  now: number,
+) {
+  const slack = record.slack;
+  if (!slack?.channelRound || !slack.source) return;
+  slack.job = {
+    drawId: crypto.randomUUID(),
+    source: { ...slack.source },
+    names: [],
+    notice,
+    status: "pending",
+    readyAt: now,
+  };
+}
+const notices: Record<ChannelNotice, string> = {
+  empty:
+    "☕ Niemand deed mee aan deze koffieronde, dus het rad bleef stil. Dan maar zelf zetten!",
+  unreadable:
+    "☕ Het Koffierad kon de reacties niet lezen, dus er is niet gedraaid. Vraag gerust een nieuwe ronde aan.",
+};
+/** Fixed text only; the same safe posting options as results. */
+function noticeBody(source: SlackSource, text: string) {
+  return {
+    channel: source.channelId,
+    thread_ts: source.parentMessageTs,
+    text,
+    blocks: [
+      {
+        type: "rich_text",
+        elements: [
+          { type: "rich_text_section", elements: [{ type: "text", text }] },
+        ],
+      },
+    ],
+    mrkdwn: false,
+    parse: "none",
+    link_names: false,
+    reply_broadcast: false,
+    unfurl_links: false,
+    unfurl_media: false,
+  };
+}
 export function resultBody(job: SlackJob) {
+  if (job.notice) return noticeBody(job.source, notices[job.notice]);
   const theme =
     themes[job.source.reactionName === "coffee" ? "coffee" : "beer"];
   const heading = `${theme.icon} Het rad heeft gesproken!\n`;
@@ -162,7 +215,7 @@ export function resultBody(job: SlackJob) {
 type PostOutcome =
   | { status: "posted"; postedMessageTs: string }
   | { status: "failed" | "uncertain"; retryAt: number };
-async function post(
+export async function postMessage(
   api: SlackApiClient,
   channelId: string,
   body: Record<string, unknown>,
@@ -191,9 +244,9 @@ export function postResult(
   api: SlackApiClient,
   job: SlackJob,
 ): Promise<PostOutcome> {
-  return post(api, job.source.channelId, resultBody(job));
+  return postMessage(api, job.source.channelId, resultBody(job));
 }
-const clock = new Intl.DateTimeFormat("nl-NL", {
+export const clock = new Intl.DateTimeFormat("nl-NL", {
   timeZone: "Europe/Amsterdam",
   hour: "2-digit",
   minute: "2-digit",
@@ -243,5 +296,5 @@ export function postReminder(
   api: SlackApiClient,
   body: ReturnType<typeof reminderBody>,
 ): Promise<PostOutcome> {
-  return post(api, body.channel, body);
+  return postMessage(api, body.channel, body);
 }

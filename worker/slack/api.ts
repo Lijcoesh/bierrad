@@ -24,6 +24,7 @@ export class SlackApiClient {
       | "reactions.get"
       | "users.info"
       | "chat.postMessage"
+      | "reactions.add"
       | "auth.test"
       | "auth.revoke"
       | "openid.connect.token",
@@ -31,17 +32,19 @@ export class SlackApiClient {
     signal?: AbortSignal,
   ): Promise<SlackObject> {
     const posting = method === "chat.postMessage";
+    // Writes travel as a JSON body; only message posts track uncertain delivery.
+    const write = posting || method === "reactions.add";
     // Client credentials travel in a form body, never in a URL or header.
     const form = method === "openid.connect.token";
     try {
       const params = new URLSearchParams(
         Object.entries(body).map(([k, v]) => [k, String(v)]),
       );
-      const query = posting || form ? "" : "?" + params;
+      const query = write || form ? "" : "?" + params;
       const response = await this.fetcher(
         `https://slack.com/api/${method}${query}`,
         {
-          method: posting || form ? "POST" : "GET",
+          method: write || form ? "POST" : "GET",
           redirect: "manual",
           headers: form
             ? { "Content-Type": "application/x-www-form-urlencoded" }
@@ -49,7 +52,7 @@ export class SlackApiClient {
                 Authorization: `Bearer ${this.token}`,
                 "Content-Type": "application/json; charset=utf-8",
               },
-          ...(posting
+          ...(write
             ? { body: JSON.stringify(body) }
             : form
               ? { body: params.toString() }

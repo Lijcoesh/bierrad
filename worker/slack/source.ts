@@ -78,7 +78,11 @@ export function displayName(raw: unknown): string | undefined {
 }
 export class SlackReactionParticipantSource {
   constructor(private api: SlackApiClient) {}
-  async getParticipants(source: SlackSource): Promise<SlackPerson[]> {
+  /** `exclude` holds private IDs that never count, such as the bot's own prefilled reaction. */
+  async getParticipants(
+    source: SlackSource,
+    exclude: readonly string[] = [],
+  ): Promise<SlackPerson[]> {
     if (
       !channel.test(source.channelId) ||
       !timestamp.test(source.parentMessageTs) ||
@@ -133,7 +137,7 @@ export class SlackReactionParticipantSource {
         Array.from({ length: Math.min(4, ids.length) }, async () => {
           while (cursor < ids.length) {
             const id = ids[cursor++];
-            if (id === "USLACKBOT") continue;
+            if (id === "USLACKBOT" || exclude.includes(id)) continue;
             const response = await this.api.call(
               "users.info",
               { user: id },

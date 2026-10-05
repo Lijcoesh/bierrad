@@ -128,9 +128,21 @@ export function SpectatorView({
         {view.phase === "result" ? (
           <SpectatorResult winners={sessionWinners(session)} />
         ) : view.phase === "empty" ? (
-          <p>
-            {theme.icon} De {theme.crew} wordt nog samengesteld…
-          </p>
+          <>
+            {view.skipped ? (
+              <p>De automatische trekking ging niet door.</p>
+            ) : (
+              <p>
+                {theme.icon} De {theme.crew} wordt nog samengesteld…
+              </p>
+            )}
+            {live.scheduledDraw?.status === "pending" && (
+              <p className="spectator-schedule">
+                ⏰ Automatische trekking{" "}
+                {formatScheduledTime(live.scheduledDraw.startAt)}
+              </p>
+            )}
+          </>
         ) : view.phase === "waiting" ? (
           <>
             {view.skipped && <p>De automatische trekking ging niet door.</p>}

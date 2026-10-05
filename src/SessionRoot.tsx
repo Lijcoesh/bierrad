@@ -15,6 +15,8 @@ import {
   liveLink,
   parseLiveRoute,
 } from "./sessions/liveNavigation";
+import { parseChannelRoute } from "./sessions/ChannelClient";
+import { ChannelBindPage, ChannelWheelPage } from "./components/ChannelPages";
 
 export function SessionRoot() {
   const [hash, setHash] = useState(location.hash);
@@ -23,6 +25,21 @@ export function SessionRoot() {
     window.addEventListener("hashchange", change);
     return () => window.removeEventListener("hashchange", change);
   }, []);
+  const channel = parseChannelRoute(hash);
+  if (channel)
+    return (
+      <VariantContext.Provider value="coffee">
+        {channel.page === "bind" ? (
+          <ChannelBindPage key={hash} failure={channel.failure} />
+        ) : (
+          <ChannelWheelPage
+            key={hash}
+            capability={channel.capability}
+            requestCapability={channel.requestCapability}
+          />
+        )}
+      </VariantContext.Provider>
+    );
   const login =
     /^#\/(coffee-)?slack(?:\/(denied|forbidden|expired|unavailable|busy))?$/.exec(
       hash,
@@ -190,6 +207,11 @@ function LiveBar({
           Start met Slack {theme.icon}
         </a>
       )}
+      {!live && apiUrl && theme.variant === "coffee" && (
+        <a className="button-link" href="#/koffie-koppelen">
+          Koppel aan een Slack-kanaal ☕
+        </a>
+      )}
       {live?.role === "host" &&
         live.status !== "unavailable" &&
         spectatorCapability && (
@@ -274,6 +296,12 @@ function SlackLogin({ failure }: { failure?: SlackFailure }) {
         >
           Log in met Slack {theme.icon}
         </a>
+      )}
+      {theme.variant === "coffee" && (
+        <p>
+          Liever een vast Koffierad voor je afdeling, waar iedereen een ronde kan
+          aanvragen? <a href="#/koffie-koppelen">Koppel het aan een Slack-kanaal</a>
+        </p>
       )}
       <p>
         <a href={localHash(theme.variant)}>Liever handmatig draaien</a>
